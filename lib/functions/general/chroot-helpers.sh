@@ -23,6 +23,11 @@ function mount_chroot() {
 	mount -t tmpfs -o "size=99%" tmpfs "${target}/var/tmp"
 	mount -t tmpfs -o "size=99%" tmpfs "${target}/run/user/0"
 	mount -t proc chproc "${target}"/proc
+	# mmdebstrap can leave a busy sysfs mount behind when host services hold
+	# references to /sys. Detach that stale mount before mounting chroot sysfs.
+	if mountpoint -q "${target}/sys"; then
+		umount --recursive --lazy "${target}/sys" || true
+	fi
 	mount -t sysfs chsys "${target}"/sys
 	mount --bind /dev "${target}"/dev
 	mount -t devpts chpts "${target}"/dev/pts || mount --bind /dev/pts "${target}"/dev/pts

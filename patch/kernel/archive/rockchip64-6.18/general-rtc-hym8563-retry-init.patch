@@ -1,0 +1,66 @@
+Subject: rtc: hym8563: retry initialization
+
+--- a/drivers/rtc/rtc-hym8563.c	2026-09-03 16:12:54.874378103 +0800
++++ b/drivers/rtc/rtc-hym8563.c	2026-09-03 16:13:46.544660110 +0800
+@@ -14,6 +14,7 @@
+ #include <linux/i2c.h>
+ #include <linux/bcd.h>
+ #include <linux/rtc.h>
++#include <linux/delay.h>
+ 
+ #define HYM8563_CTL1		0x00
+ #define HYM8563_CTL1_TEST	BIT(7)
+@@ -444,30 +445,30 @@
+ static int hym8563_init_device(struct i2c_client *client)
+ {
+ 	int ret;
++	int retry_count = 10;
+ 
+-	/* Clear stop flag if present */
+-	ret = i2c_smbus_write_byte_data(client, HYM8563_CTL1, 0);
+-	if (ret < 0)
+-		return ret;
+-
+-	ret = i2c_smbus_read_byte_data(client, HYM8563_CTL2);
+-	if (ret < 0)
+-		return ret;
+-
+-	/* Disable alarm and timer interrupts */
+-	ret &= ~HYM8563_CTL2_AIE;
+-	ret &= ~HYM8563_CTL2_TIE;
+-
+-	/* Clear any pending alarm and timer flags */
+-	if (ret & HYM8563_CTL2_AF)
+-		ret &= ~HYM8563_CTL2_AF;
+-
+-	if (ret & HYM8563_CTL2_TF)
+-		ret &= ~HYM8563_CTL2_TF;
+-
+-	ret &= ~HYM8563_CTL2_TI_TP;
+-
+-	return i2c_smbus_write_byte_data(client, HYM8563_CTL2, ret);
++	while (retry_count--) {
++		ret = i2c_smbus_write_byte_data(client, HYM8563_CTL1, 0);
++		if (ret < 0)
++			goto retry;
++		ret = i2c_smbus_read_byte_data(client, HYM8563_CTL2);
++		if (ret < 0)
++			goto retry;
++		ret &= ~HYM8563_CTL2_AIE;
++		ret &= ~HYM8563_CTL2_TIE;
++		if (ret & HYM8563_CTL2_AF)
++			ret &= ~HYM8563_CTL2_AF;
++		if (ret & HYM8563_CTL2_TF)
++			ret &= ~HYM8563_CTL2_TF;
++		ret &= ~HYM8563_CTL2_TI_TP;
++		ret = i2c_smbus_write_byte_data(client, HYM8563_CTL2, ret);
++		if (ret >= 0)
++			return 0;
++retry:
++		if (retry_count)
++			msleep(20);
++	}
++	return ret;
+ }
+ 
+ #ifdef CONFIG_PM_SLEEP

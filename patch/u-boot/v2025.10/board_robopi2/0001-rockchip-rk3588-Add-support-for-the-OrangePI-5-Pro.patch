@@ -1,0 +1,893 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: c127dev <contact@c127.dev>
+Date: Fri, 6 Mar 2026 23:51:45 +0000
+Subject: [PATCH 1/4] rockchip: rk3588: Add support for the RoboPi2
+
+Add support for the Xunlong RoboPi2 single-board computer,
+which is based on the Rockchip RK3588S SoC. The Pro variant
+differs from the base RoboPi2 in several key hardware areas:
+
+- Ethernet: PCIe-attached (MT YT6801) NIC instead of GMAC1 (RGMII).
+  GMAC0 disabled.
+- Audio: ES8388 codec on I2C3 / I2S2 (m1 mux) instead of I2C6 / I2S1.
+  Now fixed routing, replaced master.
+- LEDs: GPIO-driven (blue + green) using PWM.
+- Storage: eMMC (SDHCI) enabled by default, plus SD card and SDIO.
+  FSPI not enabled by default (Pin conflict with eMMC)
+- USB: USB-C is power-delivery only (no FUSB302 / alt-mode); a
+  dedicated USB3 Type-A port is provided via usbdp_phy0 lanes 2/3.
+- Wireless: AP6256 WiFi/BT module on SDIO + UART9.
+- Fan: PWM-controlled with thermal cooling maps.
+  Optimized speed to extend System Lifetime.
+- 40-pin header: I2C1 and I2C4 exposed for GPIO expansion.
+- Video: HDMI0 and DP0 enabled by default.
+  DP0 has LT8711UXD_U2 converter USB-DP to HDMI (I2C nc).
+
+The DTS file includes the base rk3588s-orangepi-5.dtsi and applies
+the necessary overrides and additions for the Pro hardware.
+
+This patch introduces the basic U-Boot defconfig and syncs the initial
+device tree submission from the Linux kernel mailing list.
+
+Link: https://lore.kernel.org/linux-rockchip/20260304025521.210377-4-dennis@ausil.us/
+Suggested-by: Dennis Gilmore <dennis@ausil.us>
+Signed-off-by: c127dev <contact@c127.dev>
+---
+ configs/robopi2-rk3588s_defconfig      |  88 +++
+ dts/upstream/Bindings/arm/rockchip.yaml       |   1 +
+ .../src/arm64/rockchip/rk3588-base.dtsi       |  30 +
+ .../arm64/rockchip/rk3588s-orangepi-cm5-robopi2.dts | 695 ++++++++++++++++++++++++++++++
+ 4 files changed, 815 insertions(+)
+ create mode 100644 configs/robopi2-rk3588s_defconfig
+ create mode 100644 dts/upstream/src/arm64/rockchip/rk3588s-orangepi-cm5-robopi2.dts
+
+diff --git a/configs/robopi2-rk3588s_defconfig b/configs/robopi2-rk3588s_defconfig
+new file mode 100644
+index 00000000..45370df6
+--- /dev/null
++++ b/configs/robopi2-rk3588s_defconfig
+@@ -0,0 +1,88 @@
++CONFIG_ARM=y
++CONFIG_SKIP_LOWLEVEL_INIT=y
++CONFIG_COUNTER_FREQUENCY=24000000
++CONFIG_ARCH_ROCKCHIP=y
++CONFIG_SF_DEFAULT_SPEED=24000000
++CONFIG_SF_DEFAULT_MODE=0x2000
++CONFIG_DEFAULT_DEVICE_TREE="rockchip/rk3588s-orangepi-cm5-robopi2"
++CONFIG_ROCKCHIP_RK3588=y
++CONFIG_ROCKCHIP_SPI_IMAGE=y
++CONFIG_SPL_SERIAL=y
++CONFIG_TARGET_EVB_RK3588=y
++CONFIG_SYS_LOAD_ADDR=0xc00800
++CONFIG_SF_DEFAULT_BUS=5
++CONFIG_DEBUG_UART_BASE=0xFEB50000
++CONFIG_DEBUG_UART_CLOCK=24000000
++CONFIG_SPL_SPI_FLASH_SUPPORT=y
++CONFIG_SPL_SPI=y
++CONFIG_PCI=y
++CONFIG_DEBUG_UART=y
++CONFIG_AHCI=y
++CONFIG_FIT=y
++CONFIG_FIT_VERBOSE=y
++CONFIG_SPL_FIT_SIGNATURE=y
++CONFIG_SPL_LOAD_FIT=y
++CONFIG_LEGACY_IMAGE_FORMAT=y
++CONFIG_DEFAULT_FDT_FILE="rockchip/rk3588s-orangepi-cm5-robopi2.dtb"
++CONFIG_USE_BOOTARGS=y
++CONFIG_BOOTARGS="console=ttyS2,1500000n8 earlycon=uart8250,mmio32,0xfeb50000 rootwait rootdelay=10 panic=-1 loglevel=8 ignore_loglevel"
++# CONFIG_DISPLAY_CPUINFO is not set
++CONFIG_DISPLAY_BOARDINFO_LATE=y
++CONFIG_SPL_MAX_SIZE=0x40000
++# CONFIG_SPL_RAW_IMAGE_SUPPORT is not set
++CONFIG_SPL_SPI_LOAD=y
++CONFIG_SYS_SPI_U_BOOT_OFFS=0x60000
++CONFIG_SPL_ATF=y
++CONFIG_CMD_GPIO=y
++CONFIG_CMD_GPT=y
++CONFIG_CMD_I2C=y
++CONFIG_CMD_MMC=y
++CONFIG_CMD_PCI=y
++CONFIG_CMD_USB=y
++# CONFIG_CMD_SETEXPR is not set
++CONFIG_CMD_REGULATOR=y
++# CONFIG_SPL_DOS_PARTITION is not set
++CONFIG_SPL_OF_CONTROL=y
++CONFIG_OF_LIVE=y
++CONFIG_OF_SPL_REMOVE_PROPS="clock-names interrupt-parent assigned-clocks assigned-clock-rates assigned-clock-parents"
++CONFIG_SPL_DM_SEQ_ALIAS=y
++CONFIG_SPL_REGMAP=y
++CONFIG_SPL_SYSCON=y
++CONFIG_AHCI_PCI=y
++CONFIG_DWC_AHCI=y
++CONFIG_SPL_CLK=y
++CONFIG_ROCKCHIP_GPIO=y
++CONFIG_SYS_I2C_ROCKCHIP=y
++CONFIG_MISC=y
++CONFIG_SUPPORT_EMMC_RPMB=y
++CONFIG_MMC_DW=y
++CONFIG_MMC_DW_ROCKCHIP=y
++CONFIG_MMC_SDHCI=y
++CONFIG_MMC_SDHCI_SDMA=y
++CONFIG_MMC_SDHCI_ROCKCHIP=y
++CONFIG_SPI_FLASH_SFDP_SUPPORT=y
++CONFIG_SPI_FLASH_XMC=y
++CONFIG_PHY_MOTORCOMM=y
++CONFIG_DWC_ETH_QOS=y
++CONFIG_DWC_ETH_QOS_ROCKCHIP=y
++CONFIG_NVME_PCI=y
++CONFIG_PCIE_DW_ROCKCHIP=y
++CONFIG_PHY_ROCKCHIP_INNO_USB2=y
++CONFIG_PHY_ROCKCHIP_NANENG_COMBOPHY=y
++CONFIG_PHY_ROCKCHIP_USBDP=y
++CONFIG_SPL_PINCTRL=y
++CONFIG_PWM_ROCKCHIP=y
++CONFIG_SPL_RAM=y
++CONFIG_SCSI=y
++CONFIG_BAUDRATE=1500000
++CONFIG_DEBUG_UART_SHIFT=2
++CONFIG_SYS_NS16550_MEM32=y
++CONFIG_ROCKCHIP_SFC=y
++CONFIG_SYSRESET=y
++CONFIG_USB=y
++CONFIG_USB_XHCI_HCD=y
++CONFIG_USB_EHCI_HCD=y
++CONFIG_USB_EHCI_GENERIC=y
++CONFIG_USB_OHCI_HCD=y
++CONFIG_USB_OHCI_GENERIC=y
++CONFIG_USB_DWC3=y
++CONFIG_USB_DWC3_GENERIC=y
++CONFIG_ERRNO_STR=y
+diff --git a/dts/upstream/Bindings/arm/rockchip.yaml b/dts/upstream/Bindings/arm/rockchip.yaml
+index 5772d905..91b01263 100644
+--- a/dts/upstream/Bindings/arm/rockchip.yaml
++++ b/dts/upstream/Bindings/arm/rockchip.yaml
+@@ -1213,6 +1213,7 @@ properties:
+           - enum:
+               - xunlong,orangepi-5
+               - xunlong,orangepi-5b
++              - xunlong,orangepi-robopi2
+           - const: rockchip,rk3588s
+ 
+       - description: Zkmagic A95X Z2
+diff --git a/dts/upstream/src/arm64/rockchip/rk3588-base.dtsi b/dts/upstream/src/arm64/rockchip/rk3588-base.dtsi
+index 70f03e68..39c9d3e6 100644
+--- a/dts/upstream/src/arm64/rockchip/rk3588-base.dtsi
++++ b/dts/upstream/src/arm64/rockchip/rk3588-base.dtsi
+@@ -1472,6 +1472,36 @@
+ 		};
+ 	};
+ 
++	dp0: dp@fde50000 {
++		compatible = "rockchip,rk3588-dp";
++		reg = <0x0 0xfde50000 0x0 0x4000>;
++		interrupts = <GIC_SPI 161 IRQ_TYPE_LEVEL_HIGH 0>;
++		assigned-clocks = <&cru CLK_AUX16M_0>;
++		assigned-clock-rates = <16000000>;
++		clocks = <&cru PCLK_DP0>, <&cru CLK_AUX16M_0>,
++			 <&cru CLK_DP0>, <&cru MCLK_I2S4_8CH_TX>,
++			 <&cru MCLK_SPDIF2_DP0>;
++		clock-names = "apb", "aux", "hdcp", "i2s", "spdif";
++		phys = <&usbdp_phy0 PHY_TYPE_DP>;
++		power-domains = <&power RK3588_PD_VO0>;
++		resets = <&cru SRST_DP0>;
++		#sound-dai-cells = <0>;
++		status = "disabled";
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			dp0_in: port@0 {
++				reg = <0>;
++			};
++
++			dp0_out: port@1 {
++				reg = <1>;
++			};
++		};
++	};
++
+ 	hdmi0: hdmi@fde80000 {
+ 		compatible = "rockchip,rk3588-dw-hdmi-qp";
+ 		reg = <0x0 0xfde80000 0x0 0x20000>;
+diff --git a/dts/upstream/src/arm64/rockchip/rk3588s-orangepi-cm5-robopi2.dts b/dts/upstream/src/arm64/rockchip/rk3588s-orangepi-cm5-robopi2.dts
+new file mode 100644
+index 00000000..91ab9f42
+--- /dev/null
++++ b/dts/upstream/src/arm64/rockchip/rk3588s-orangepi-cm5-robopi2.dts
+@@ -0,0 +1,695 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++
++/dts-v1/;
++
++#include "rk3588s-orangepi-5.dtsi"
++
++/ {
++	model = "RK3588S Orange Pi CM5 ROBOPI2";
++	compatible = "roboparty,robopi2", "xunlong,orangepi-5-pro", "rockchip,rk3588s";
++
++	aliases {
++		/delete-property/ ethernet0;
++		mmc0 = &sdhci;
++		mmc1 = &sdmmc;
++		mmc2 = &sdio;
++	};
++
++	/delete-node/ regulator-vcc-3v3-sd-s0;
++	/delete-node/ pwm-leds;
++	/delete-node/ analog-sound;
++
++	dp0-con {
++		compatible = "dp-connector";
++		type = "full-size";
++		status = "disabled";
++
++		port {
++			dp_con_in: endpoint {
++				remote-endpoint = <&dp0_out_con>;
++			};
++		};
++	};
++
++	/* GPIO1_D7 drives the fan MOSFET; keep the fan on at full speed. */
++	fan_enable: regulator-fan-enable {
++		compatible = "regulator-fixed";
++		regulator-name = "fan_enable";
++		enable-active-high;
++		gpios = <&gpio1 RK_PD7 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&fan_enable_gpio>;
++		regulator-always-on;
++		regulator-boot-on;
++	};
++
++	/* PCIe 2.0 Regulator for MT YT6801 (PCIE-to-Ethernet) */
++	vcc3v3_phy1: regulator-vcc3v3-phy1 {
++		compatible = "regulator-fixed";
++		enable-active-high;
++		/* Prevent PCIe PHY getting STUCK */
++		startup-delay-us = <50000>;
++		regulator-always-on;
++		regulator-boot-on;
++		gpios = <&gpio3 RK_PB7 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&vcc3v3_phy1_en>;
++		regulator-max-microvolt = <3300000>;
++		regulator-min-microvolt = <3300000>;
++		regulator-name = "vcc3v3_phy1";
++		vin-supply = <&vcc_3v3_s3>;
++	};
++
++	/* USB Type-C 5V supply */
++	vcc5v0_typec: regulator-vcc5v0-typec {
++		compatible = "regulator-fixed";
++		enable-active-high;
++		gpios = <&gpio4 RK_PB7 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&vcc5v0_typec_en>;
++		regulator-always-on;
++		regulator-boot-on;
++		regulator-max-microvolt = <5000000>;
++		regulator-min-microvolt = <5000000>;
++		regulator-name = "vcc5v0_typec";
++		vin-supply = <&vcc5v0_sys>;
++	};
++
++	/* USB 2.0 hub 3.3V supply */
++	vcc3v3_usb2_hub: regulator-vcc3v3-usb2-hub {
++		compatible = "regulator-fixed";
++		enable-active-high;
++		gpios = <&gpio4 RK_PC0 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&vcc3v3_usb2_hub_en>;
++		regulator-always-on;
++		regulator-boot-on;
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-name = "vcc3v3_usb2_hub";
++		vin-supply = <&vcc_3v3_s3>;
++	};
++
++	/* Main USB hub 3.3V supply */
++	vcc3v3_usb_hub: regulator-vcc3v3-usb-hub {
++		compatible = "regulator-fixed";
++		enable-active-high;
++		gpios = <&gpio1 RK_PD2 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&vcc3v3_usb_hub_en>;
++		regulator-always-on;
++		regulator-boot-on;
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-name = "vcc3v3_usb_hub";
++		vin-supply = <&vcc_3v3_s3>;
++	};
++
++	/delete-node/ vbus_typec;
++	/delete-node/ vcc_3v3_sd_s0;
++
++	/* Power Sequence for SDIO (WiFi/Bluetooth Card) */
++	sdio_pwrseq: sdio-pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		clocks = <&hym8563>;
++		clock-names = "ext_clock";
++		pinctrl-names = "default";
++		pinctrl-0 = <&wifi_enable_h>;
++		/*
++		 * On the module itself this is one of these (depending
++		 * on the actual card populated):
++		 * - SDIO_RESET_L_WL_REG_ON
++		 * - PDN (power down when low)
++		 */
++		post-power-on-delay-ms = <200>;
++		reset-gpios = <&gpio0 RK_PD0 GPIO_ACTIVE_LOW>;
++	};
++
++	wireless_bluetooth: wireless-bluetooth {
++		compatible = "bluetooth-platdata";
++		clocks = <&hym8563>;
++		clock-names = "ext_clock";
++		uart_rts_gpios = <&gpio3 RK_PD2 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default", "rts_gpio";
++		pinctrl-0 = <&uart9m2_rtsn>,  <&bt_reset_gpio>, <&bt_wake_gpio>, <&bt_irq_gpio>;
++		pinctrl-1 = <&uart9_gpios>;
++		BT,reset_gpio    = <&gpio0 RK_PD3 GPIO_ACTIVE_HIGH>;
++		BT,wake_gpio     = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
++		BT,wake_host_irq = <&gpio0 RK_PC5 GPIO_ACTIVE_HIGH>;
++		status = "okay";
++	};
++
++	wireless_wlan: wireless-wlan {
++		compatible = "wlan-platdata";
++		wifi_chip_type = "ap6256";
++		pinctrl-names = "default";
++		pinctrl-0 = <&wifi_host_wake_irq>;
++		WIFI,host_wake_irq = <&gpio0 RK_PA0 GPIO_ACTIVE_HIGH>;
++		WIFI,poweren_gpio = <&gpio0 RK_PD0 GPIO_ACTIVE_HIGH>;
++		status = "okay";
++		// clocks = <&hym8563>;
++		// clock-names = "ref_wifi_clk";
++	};
++
++	gpio_keys: gpio-keys {
++		compatible = "gpio-keys";
++		autorepeat;
++		pinctrl-names = "default";
++		pinctrl-0 = <&key1_pin &key2_pin &key3_pin &key4_pin &key5_pin>;
++
++		key1 {
++			label = "Key 1";
++			linux,code = <KEY_PROG1>;
++			gpios = <&gpio3 RK_PB1 GPIO_ACTIVE_LOW>;
++			debounce-interval = <20>;
++		};
++		key2 {
++			label = "Key 2";
++			linux,code = <KEY_PROG2>;
++			gpios = <&gpio3 RK_PB4 GPIO_ACTIVE_LOW>;
++			debounce-interval = <20>;
++		};
++		key3 {
++			label = "Key 3";
++			linux,code = <KEY_PROG3>;
++			gpios = <&gpio3 RK_PB5 GPIO_ACTIVE_LOW>;
++			debounce-interval = <20>;
++		};
++		key4 {
++			label = "Key 4";
++			linux,code = <KEY_PROG4>;
++			gpios = <&gpio3 RK_PB6 GPIO_ACTIVE_LOW>;
++			debounce-interval = <20>;
++		};
++		key5 {
++			label = "Key 5";
++			linux,code = <BTN_5>;
++			gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_HIGH>;
++			debounce-interval = <20>;
++		};
++	};
++
++	dual-battery-control {
++		compatible = "gpio-leds";
++		pinctrl-names = "default";
++		pinctrl-0 = <&dual_battery_b0_pin
++			     &dual_battery_b7_pin
++			     &dual_battery_c2_pin>;
++
++		dual-battery-b0 {
++			label = "dual_battery_b0";
++			gpios = <&gpio1 RK_PB0 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "none";
++			default-state = "off";
++		};
++
++		dual-battery-b7 {
++			label = "dual_battery_b7";
++			gpios = <&gpio1 RK_PB7 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "none";
++			default-state = "off";
++		};
++
++		dual-battery-c2 {
++			label = "dual_battery_c2";
++			gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "none";
++			default-state = "off";
++		};
++	};
++
++	/* HPM reset and boot control */
++	hpm_control: hpm-control {
++		compatible = "gpio-leds";
++		pinctrl-names = "default";
++		pinctrl-0 = <&hpm_reset_gpio &hpm_boot_en_gpio>;
++
++		hpm-reset {
++			label = "hpm_reset";
++			gpios = <&gpio4 RK_PB5 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "none";
++			default-state = "off";
++		};
++
++		hpm-boot-enable {
++			label = "hpm_boot_enable";
++			gpios = <&gpio1 RK_PC6 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "default-on";
++			default-state = "on";
++		};
++	};
++};
++
++/* Disable gmac1 as the pro has a PCIe attached NIC */
++&gmac1 {
++	status = "disabled";
++};
++
++/* ROBOPI2 has no hdmi */
++&hdmi0 {
++	status = "disabled";
++};
++
++/* ROBOPI2 routes the HYM8563 RTC to i2c1 instead of the inherited i2c6. */
++/delete-node/ &hym8563;
++/delete-node/ &es8388;
++/delete-node/ &usbc0;
++
++// &i2c0 is pmic
++
++&i2c1 {
++	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c1m2_xfer>;
++
++	hym8563: hym8563@51 {
++		compatible = "haoyu,hym8563";
++		reg = <0x51>;
++		#clock-cells = <0>;
++		clock-frequency = <32768>;
++		clock-output-names = "hym8563";
++		pinctrl-names = "default";
++		pinctrl-0 = <&hym8563_int>;
++		interrupt-parent = <&gpio0>;
++		interrupts = <RK_PB0 IRQ_TYPE_LEVEL_LOW>;
++		status = "okay";
++	};
++};
++
++// &i2c2 is pmic
++
++&i2c3 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c3m0_xfer>;
++	status = "disabled";
++};
++
++/* 40-pin header pins 27/28 */
++&i2c4 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c4m3_xfer>;
++	status = "okay";
++};
++
++&i2c5 {
++	status = "disabled";
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c5m3_xfer>;
++};
++
++&i2c6 {
++	status = "disabled";
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c6m3_xfer>;
++};
++
++&i2c7 {
++	status = "disabled";
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c7m3_xfer>;
++};
++
++/*
++ * i2s1_8ch uses i2s1m0 which occupies GPIO4_PA0 (CLKREQ#) and GPIO4_PA1
++ * (WAKE#) needed for the NVMe M.2 slot. Disable it; audio is on i2s2_2ch.
++ */
++&i2s1_8ch {
++	status = "disabled";
++};
++
++/* Audio codec on i2s2, m1 mux; add mclk pin to the base pinctrl */
++&i2s2_2ch {
++	status = "disabled";
++};
++
++
++&spi0 {
++	status = "disabled";
++    assigned-clocks = <&cru CLK_SPI0>;
++    assigned-clock-rates = <200000000>;
++};
++
++&spi1 {
++	status = "disabled";
++	assigned-clocks = <&cru CLK_SPI1>;
++	assigned-clock-rates = <200000000>;
++};
++
++// &spi2 is pmic
++
++&sata0 {
++	status = "disabled";
++};
++
++/* Enable NVMe */
++&pcie2x1l1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pcie30x1m1_1_clkreqn &pcie30x1m1_1_waken>;
++	reset-gpios = <&gpio4 RK_PA2 GPIO_ACTIVE_HIGH>;
++	supports-clkreq;
++	status = "disabled";
++};
++
++/* Enable NIC */
++&pcie2x1l2 {
++	reset-gpios = <&gpio3 RK_PD1 GPIO_ACTIVE_HIGH>;
++	vpcie3v3-supply = <&vcc3v3_phy1>;
++	status = "okay";
++};
++
++&pinctrl {
++	ethernet {
++		vcc3v3_phy1_en: vcc3v3-phy1-en {
++			rockchip,pins = <3 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	usb-typec {
++		usbc0_int: usbc0-int {
++			rockchip,pins = <4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>;
++		};
++
++		typec5v_pwren: typec5v-pwren {
++			rockchip,pins = <4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	usb {
++		vcc5v0_typec_en: vcc5v0-typec-en {
++			rockchip,pins = <4 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		vcc3v3_usb2_hub_en: vcc3v3-usb2-hub-en {
++			rockchip,pins = <4 RK_PC0 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		vcc3v3_usb_hub_en: vcc3v3-usb-hub-en {
++			rockchip,pins = <1 RK_PD2 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		vcc5v0_host_en: vcc5v0-host-en {
++			rockchip,pins = <4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	sdio-pwrseq {
++		wifi_enable_h: wifi-enable-h {
++			rockchip,pins = <0 RK_PD0 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	wireless-bluetooth {
++		uart9_gpios: uart9-gpios {
++			rockchip,pins = <3 RK_PD2 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		bt_reset_gpio: bt-reset-gpio {
++			rockchip,pins = <0 RK_PD3 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		bt_wake_gpio: bt-wake-gpio {
++			rockchip,pins = <0 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		bt_irq_gpio: bt-irq-gpio {
++			rockchip,pins = <0 RK_PC5 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++	};
++
++	wireless-wlan {
++		wifi_host_wake_irq: wifi-host-wake-irq {
++			rockchip,pins = <0 RK_PA0 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++	};
++
++	fan {
++		fan_enable_gpio: fan-enable-gpio {
++			rockchip,pins = <1 RK_PD7 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	hpm-control {
++		hpm_reset_gpio: hpm-reset-gpio {
++			rockchip,pins = <4 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		hpm_boot_en_gpio: hpm-boot-en-gpio {
++			rockchip,pins = <1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++
++	gpio-keys {
++		key1_pin: key1-pin {
++			rockchip,pins = <3 RK_PB1 RK_FUNC_GPIO &pcfg_pull_up>;
++		};
++		key2_pin: key2-pin {
++			rockchip,pins = <3 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>;
++		};
++		key3_pin: key3-pin {
++			rockchip,pins = <3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_up>;
++		};
++		key4_pin: key4-pin {
++			rockchip,pins = <3 RK_PB6 RK_FUNC_GPIO &pcfg_pull_up>;
++		};
++		key5_pin: key5-pin {
++			rockchip,pins = <1 RK_PD5 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++	};
++
++	dual-battery-control {
++		dual_battery_b0_pin: dual-battery-b0-pin {
++			rockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++
++		dual_battery_b7_pin: dual-battery-b7-pin {
++			rockchip,pins = <1 RK_PB7 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++
++		dual_battery_c2_pin: dual-battery-c2-pin {
++			rockchip,pins = <0 RK_PC2 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++	};
++};
++
++&pwm0 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm0m2_pins>;
++	status = "okay";
++};
++
++&pwm1 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm1m2_pins>;
++	status = "disabled";
++};
++
++&pwm3 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm3m3_pins>;
++	status = "okay";
++};
++
++&pwm6 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm6m1_pins>;
++	status = "okay";
++};
++
++&pwm10 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm10m1_pins>;
++	status = "okay";
++};
++
++&pwm11 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pwm11m2_pins>;
++	status = "disabled";
++};
++
++&pwm13 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm13m2_pins>;
++	status = "disabled";
++};
++
++&pwm14 {
++	pinctrl-names = "active";
++	pinctrl-0 = <&pwm14m0_pins>;
++	status = "okay";
++};
++
++&pwm15 {
++	status = "disabled";
++};
++
++&sdhci {
++	status = "okay";
++};
++
++&sdmmc {
++	/delete-property/ vmmc-supply;
++};
++
++/* Disable SPI Flash — pins muxed with eMMC */
++&sfc {
++	status = "disabled";
++};
++
++/* Enable SDIO for WiFi/Bluetooth Card */
++&sdio {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	bus-width = <4>;
++	cap-sd-highspeed;
++	cap-sdio-irq;
++	keep-power-in-suspend;
++	max-frequency = <150000000>;
++	mmc-pwrseq = <&sdio_pwrseq>;
++	no-mmc;
++	no-sd;
++	non-removable;
++	sd-uhs-sdr104;
++	status = "okay";
++
++	ap6256: wifi@1 {
++		compatible = "brcm,bcm43456-fmac", "brcm,bcm4329-fmac";
++		reg = <1>;
++		interrupt-names = "host-wake";
++		interrupt-parent = <&gpio0>;
++		interrupts = <RK_PA0 IRQ_TYPE_LEVEL_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&wifi_host_wake_irq>;
++	};
++};
++
++// hpmicro log
++&uart0 {
++	status = "okay";
++	pinctrl-0 = <&uart1m1_xfer>;
++};
++
++&uart1 {
++	status = "disabled";
++	pinctrl-0 = <&uart1m1_xfer>;
++};
++
++// &uart2 as uart login
++
++// bms log
++&uart3 {
++	status = "okay";
++	pinctrl-0 = <&uart3m0_xfer>;
++};
++
++&uart4 {
++	status = "disabled";
++	pinctrl-0 = <&uart4m2_xfer>;
++};
++
++&uart5 {
++	status = "disabled";
++	pinctrl-0 = <&uart5m2_xfer>;
++};
++
++&uart6 {
++	status = "okay";
++	pinctrl-0 = <&uart6m2_xfer>;
++};
++
++&uart7 {
++	status = "disabled";
++	pinctrl-0 = <&uart7m2_xfer>;
++};
++
++&uart8 {
++	status = "okay";
++	pinctrl-0 = <&uart8m1_xfer>;
++};
++
++/* Enable UART for Bluetooth */
++&uart9 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart9m2_xfer &uart9m2_ctsn &uart9m2_rtsn>;
++	uart-has-rtscts;
++	status = "okay";
++
++	bluetooth {
++		compatible = "brcm,bcm4345c5";
++		clocks = <&hym8563>;
++		clock-names = "lpo";
++		device-wakeup-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
++		interrupt-names = "host-wakeup";
++		interrupt-parent = <&gpio0>;
++		interrupts = <RK_PC5 IRQ_TYPE_LEVEL_HIGH>;
++		max-speed = <1500000>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&bt_irq_gpio &bt_wake_gpio>;
++		shutdown-gpios = <&gpio0 RK_PD5 GPIO_ACTIVE_HIGH>;
++		vbat-supply = <&vcc_3v3_s3>;
++		vddio-supply = <&vcc_1v8_s3>;
++	};
++};
++
++/* USB2 OTG PHY for usb_host0_xhci; phy-supply enables VBUS to USB3 Type-A port */
++&u2phy0_otg {
++	phy-supply = <&vcc5v0_typec>;
++};
++
++/*
++ * The Pro's USB-C port is power delivery only: no FUSB302, no data lines,
++ * no alt-mode switching. The parent DTSI enables usbdp_phy0 (status = "okay")
++ * and adds FUSB302 alt-mode/orientation properties; delete those here.
++ *
++ * dp-lane-mux = <0 1>: PHY lanes 0/1 are DP (physically routed to the
++ * LT8711UXD DP→HDMI2 bridge), lanes 2/3 are USB3 SuperSpeed (physically
++ * routed to the USB3 Type-A port P3). Without this property the driver
++ * defaults to USB-only mode and places USB3 on lanes 0/1, which do not
++ * reach the Type-A connector and makes the USB3 port non-functional.
++ */
++&usbdp_phy0 {
++	status = "disabled";
++	rockchip,dp-lane-mux = <0 1>;
++	/delete-property/ mode-switch;
++	/delete-property/ orientation-switch;
++	/delete-property/ sbu1-dc-gpios;
++	/delete-property/ sbu2-dc-gpios;
++	/delete-node/ port;
++};
++
++/* USB3 Type-A port*/
++&usb_host0_xhci {
++	dr_mode = "host";
++	/delete-property/ usb-role-switch;
++	status = "okay";
++	/delete-node/ port;
++};
++
++&usb_host2_xhci {
++	status = "okay";
++};
++
++/* Experimental: Enable DisplayPort 1.4 to HDMI 2.0 */
++&dp0 {
++	status = "disabled";
++};
++
++&dp0_in {
++	dp0_in_vp2: endpoint {
++		remote-endpoint = <&vp2_out_dp0>;
++	};
++};
++
++&dp0_out {
++	dp0_out_con: endpoint {
++		remote-endpoint = <&dp_con_in>;
++	};
++};
++
++&vp2 {
++	vp2_out_dp0: endpoint@a {
++		reg = <ROCKCHIP_VOP2_EP_DP0>;
++		remote-endpoint = <&dp0_in_vp2>;
++	};
++}; 
++

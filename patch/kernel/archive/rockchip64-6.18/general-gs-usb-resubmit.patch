@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RoboParty <robo@roboparty.local>
+Date: Fri, 11 Sep 2026 23:59:00 +0800
+Subject: [PATCH] can: gs_usb: keep RX URBs alive after transient USB errors
+
+USB CAN RX bulk transfers can occasionally complete with transient USB
+errors such as -EOVERFLOW. Returning from the completion callback in that
+case permanently drops one RX URB. After enough such events, all RX URBs
+can be exhausted and receive traffic stops.
+
+Resubmit RX URBs after recoverable USB errors and allow a diagnostic
+module parameter to raise the RX URB buffer size floor to 512 bytes.
+
+Signed-off-by: RoboParty <robo@roboparty.local>
+---
+ drivers/net/can/usb/gs_usb.c | 28 +++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/can/usb/gs_usb.c b/drivers/net/can/usb/gs_usb.c
+index 241ffa8daaee..241ffa8daaee 100644
+--- a/drivers/net/can/usb/gs_usb.c
++++ b/drivers/net/can/usb/gs_usb.c
+@@ -296,6 +296,24 @@ struct gs_host_frame {
+ #define GS_MAX_RX_URBS 30
+ #define GS_NAPI_WEIGHT 32
+ 
++static unsigned int rx_buffer_bytes;
++module_param(rx_buffer_bytes, uint, 0444);
++MODULE_PARM_DESC(rx_buffer_bytes,
++		 "Diagnostic receive buffer floor in bytes (0 or 512)");
++
++static atomic_t rx_error_count = ATOMIC_INIT(0);
++static int gs_usb_atomic_get(char *buffer, const struct kernel_param *kp)
++{
++	return scnprintf(buffer, PAGE_SIZE, "%d\n", atomic_read(kp->arg));
++}
++
++static const struct kernel_param_ops gs_usb_atomic_ops = {
++	.get = gs_usb_atomic_get,
++};
++module_param_cb(rx_error_count, &gs_usb_atomic_ops,
++		&rx_error_count, 0444);
++MODULE_PARM_DESC(rx_error_count, "Recoverable RX URB error count");
++
+ struct gs_tx_context {
+ 	struct gs_can *dev;
+ 	unsigned int echo_id;
+@@ -627,9 +645,15 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
+ 		break;
+ 	case -ENOENT:
+ 	case -ESHUTDOWN:
++	case -ECONNRESET:
+ 		return;
++	case -EOVERFLOW:
++	case -EPROTO:
++	case -EILSEQ:
++		atomic_inc(&rx_error_count);
++		goto resubmit_urb;
+ 	default:
+-		/* do not resubmit aborted urbs. eg: when device goes down */
++		/* Do not resubmit unknown errors or aborted URBs. */
+ 		return;
+ 	}
+ 
+@@ -1606,6 +1630,11 @@ static int gs_usb_probe(struct usb_interface *intf,
+ 				hf_size_rx = struct_size(hf, classic_can, 1);
+ 		}
+ 		parent->hf_size_rx = max(parent->hf_size_rx, hf_size_rx);
+ 	}
++	if (rx_buffer_bytes == 512)
++		parent->hf_size_rx = max(parent->hf_size_rx, rx_buffer_bytes);
++	else if (rx_buffer_bytes)
++		dev_warn(&intf->dev, "unsupported rx_buffer_bytes=%u\n",
++			 rx_buffer_bytes);
+ 
+ 	return 0;
+-- 
+2.43.0

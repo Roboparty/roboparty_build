@@ -17,7 +17,73 @@ LINUXFAMILY=$2
 BOARD=$3
 BUILD_DESKTOP=$4
 
+configure_common_rootfs() {
+    local user_name="robo"
+    local user_home="/home/${user_name}"
+
+    if ! id "${user_name}" >/dev/null 2>&1; then
+        useradd --no-create-home --home-dir "${user_home}" --shell /bin/bash "${user_name}"
+    else
+        usermod --home "${user_home}" --shell /bin/bash "${user_name}"
+    fi
+
+    local user_group
+    local realtime_group="roboparty"
+
+    if ! getent group "${realtime_group}" >/dev/null 2>&1; then
+        groupadd --system "${realtime_group}"
+    fi
+
+    user_group="$(id -gn "${user_name}")"
+    mkdir -p "${user_home}"
+    if [[ -d /etc/skel ]]; then
+        cp -an /etc/skel/. "${user_home}/"
+    fi
+    chown -R "${user_name}:${user_group}" "${user_home}"
+    chmod 0755 "${user_home}"
+    usermod --append --groups "sudo,dialout,video,plugdev,${realtime_group}" "${user_name}" 2>/dev/null || true
+
+    # Set initial credentials for administrative and regular access.
+    # The user can change them after first login with `passwd`.
+    printf "root:robo\n%s:robo\n" "${user_name}" | chpasswd
+
+    # Disable Armbian first-login password-change prompt.
+    rm -f /root/.not_logged_in_yet
+
+    # Configure systemd-resolved default DNS. /etc/resolv.conf stays as the stub symlink.
+    local dns_config="/etc/systemd/resolved.conf.d/10-${BOARD}-dns.conf"
+    install -d -m 0755 /etc/systemd/resolved.conf.d
+    cat > "${dns_config}" <<EOF
+[Resolve]
+DNS=8.8.8.8
+EOF
+
+    install -d -m 0755 /etc/security/limits.d
+    rm -f /etc/security/limits.d/robo.conf
+    cat > /etc/security/limits.d/roboparty.conf <<EOF
+@${realtime_group} - rtprio 99
+@${realtime_group} - memlock unlimited
+EOF
+
+    install -d -m 0755 /etc/default
+    if [[ -f /etc/default/cpufrequtils ]]; then
+        sed -i "s/^GOVERNOR=.*/GOVERNOR=performance/" /etc/default/cpufrequtils
+    else
+        printf "GOVERNOR=performance\n" > /etc/default/cpufrequtils
+    fi
+
+    # Generate unique SSH host keys during first boot, never in shared cache.
+    if [[ -f /etc/default/armbian-firstrun ]]; then
+        if grep -q "^OPENSSHD_REGENERATE_HOST_KEYS=" /etc/default/armbian-firstrun; then
+            sed -i "s/^OPENSSHD_REGENERATE_HOST_KEYS=.*/OPENSSHD_REGENERATE_HOST_KEYS=true/" /etc/default/armbian-firstrun
+        else
+            printf "OPENSSHD_REGENERATE_HOST_KEYS=true\n" >> /etc/default/armbian-firstrun
+        fi
+    fi
+}
+
 Main() {
+	configure_common_rootfs
 	case $RELEASE in
 		stretch)
 			# your code here

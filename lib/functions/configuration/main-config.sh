@@ -71,6 +71,10 @@ function do_main_configuration() {
 	# Fix old U-Boot pylibfdt failing against SWIG >= 4.3 (trixie). No-op on newer U-Boot. Can be removed when all U-Boot versions are >= v2026.07.
 	enable_extension "uboot-fix-pylibfdt-swig"
 
+	# Optional RoboParty and ROS 2 image packages.
+	[[ "${BUILD_ROS2:-no}" == "yes" ]] && enable_extension "ros2"
+	[[ "${BUILD_ROBOPARTY_PACKAGES:-no}" == "yes" ]] && enable_extension "roboparty"
+
 	# Network stack to use, default to network-manager; configuration can override this.
 	# Will be made read-only further down.
 	declare -g NETWORKING_STACK="${NETWORKING_STACK}"

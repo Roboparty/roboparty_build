@@ -1,0 +1,786 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+
+/dts-v1/;
+
+#include "rk3588s-orangepi-5.dtsi"
+
+/ {
+	model = "RK3588S Orange Pi CM5 ROBOPI2";
+	compatible = "roboparty,robopi2", "xunlong,orangepi-5-pro", "rockchip,rk3588s";
+
+	aliases {
+		/delete-property/ ethernet0;
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc;
+		mmc2 = &sdio;
+	};
+
+	/delete-node/ regulator-vcc-3v3-sd-s0;
+	/delete-node/ pwm-leds;
+	/delete-node/ analog-sound;
+
+	// ethernet_switch: ethernet-switch {
+	// 	compatible = "realtek,rtl8365mb";
+	// 	pinctrl-names = "default";
+	// 	pinctrl-0 = <&rtl8367_smi_pins>;
+	// 	mdc-gpios = <&gpio4 RK_PB1 GPIO_ACTIVE_HIGH>;
+	// 	mdio-gpios = <&gpio4 RK_PB0 GPIO_ACTIVE_HIGH>;
+
+	// 	ports {
+	// 		#address-cells = <1>;
+	// 		#size-cells = <0>;
+
+	// 		port@0 {
+	// 			reg = <0>;
+	// 			ethernet = <&rtl8125_0>;
+	// 			phy-mode = "internal";
+	// 			phy-handle = <&switchphy0>;
+	// 			dsa-tag-protocol = "rtl8_4";
+	// 		};
+
+	// 		port@1 {
+	// 			reg = <1>;
+	// 			label = "p1";
+	// 			phy-handle = <&switchphy1>;
+	// 		};
+
+	// 		port@2 {
+	// 			reg = <2>;
+	// 			label = "p2";
+	// 			phy-handle = <&switchphy2>;
+	// 		};
+	// 	};
+
+	// 	mdio {
+	// 		compatible = "realtek,smi-mdio";
+	// 		#address-cells = <1>;
+	// 		#size-cells = <0>;
+
+	// 		switchphy0: ethernet-phy@0 {
+	// 			reg = <0>;
+	// 		};
+
+	// 		switchphy1: ethernet-phy@1 {
+	// 			reg = <1>;
+	// 		};
+
+	// 		switchphy2: ethernet-phy@2 {
+	// 			reg = <2>;
+	// 		};
+	// 	};
+	// };
+
+	dp0-con {
+		compatible = "dp-connector";
+		type = "full-size";
+		status = "disabled";
+
+		port {
+			dp_con_in: endpoint {
+				remote-endpoint = <&dp0_out_con>;
+			};
+		};
+	};
+
+	/* GPIO1_D7 drives the fan MOSFET; keep the fan on at full speed. */
+	fan_enable: regulator-fan-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "fan_enable";
+		enable-active-high;
+		gpios = <&gpio1 RK_PD7 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&fan_enable_gpio>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	/* PCIe 2.0 Regulator for MT YT6801 (PCIE-to-Ethernet) */
+	/* USB Type-C 5V supply */
+	vcc5v0_typec: regulator-vcc5v0-typec {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpios = <&gpio4 RK_PB7 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_typec_en>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-max-microvolt = <5000000>;
+		regulator-min-microvolt = <5000000>;
+		regulator-name = "vcc5v0_typec";
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	/* USB 2.0 hub 3.3V supply */
+	vcc3v3_usb2_hub: regulator-vcc3v3-usb2-hub {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpios = <&gpio4 RK_PC0 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc3v3_usb2_hub_en>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-name = "vcc3v3_usb2_hub";
+		vin-supply = <&vcc_3v3_s3>;
+	};
+
+	/delete-node/ vbus_typec;
+	/delete-node/ vcc_3v3_sd_s0;
+
+	/* Power Sequence for SDIO (WiFi/Bluetooth Card) */
+	sdio_pwrseq: sdio-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		clocks = <&hym8563>;
+		clock-names = "ext_clock";
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_enable_h>;
+		/*
+		 * On the module itself this is one of these (depending
+		 * on the actual card populated):
+		 * - SDIO_RESET_L_WL_REG_ON
+		 * - PDN (power down when low)
+		 */
+		post-power-on-delay-ms = <200>;
+		reset-gpios = <&gpio0 RK_PD0 GPIO_ACTIVE_LOW>;
+	};
+
+	wireless_bluetooth: wireless-bluetooth {
+		compatible = "bluetooth-platdata";
+		clocks = <&hym8563>;
+		clock-names = "ext_clock";
+		uart_rts_gpios = <&gpio3 RK_PD2 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default", "rts_gpio";
+		pinctrl-0 = <&uart9m2_rtsn>,  <&bt_reset_gpio>, <&bt_wake_gpio>, <&bt_irq_gpio>;
+		pinctrl-1 = <&uart9_gpios>;
+		BT,reset_gpio    = <&gpio0 RK_PD3 GPIO_ACTIVE_HIGH>;
+		BT,wake_gpio     = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+		BT,wake_host_irq = <&gpio0 RK_PC5 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	wireless_wlan: wireless-wlan {
+		compatible = "wlan-platdata";
+		wifi_chip_type = "ap6256";
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_host_wake_irq>;
+		WIFI,host_wake_irq = <&gpio0 RK_PA0 GPIO_ACTIVE_HIGH>;
+		WIFI,poweren_gpio = <&gpio0 RK_PD0 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+		clocks = <&hym8563>;
+		clock-names = "ref_wifi_clk";
+	};
+
+	gpio_keys: gpio-keys {
+		compatible = "gpio-keys";
+		autorepeat;
+		pinctrl-names = "default";
+		pinctrl-0 = <&key1_pin &key2_pin &key3_pin &key4_pin &key5_pin>;
+
+		key1 {
+			label = "Key 1";
+			linux,code = <KEY_PROG1>;
+			gpios = <&gpio3 RK_PB1 GPIO_ACTIVE_LOW>;
+			debounce-interval = <20>;
+		};
+		key2 {
+			label = "Key 2";
+			linux,code = <KEY_PROG2>;
+			gpios = <&gpio3 RK_PB4 GPIO_ACTIVE_LOW>;
+			debounce-interval = <20>;
+		};
+		key3 {
+			label = "Key 3";
+			linux,code = <KEY_PROG3>;
+			gpios = <&gpio3 RK_PB5 GPIO_ACTIVE_LOW>;
+			debounce-interval = <20>;
+		};
+		key4 {
+			label = "Key 4";
+			linux,code = <KEY_PROG4>;
+			gpios = <&gpio3 RK_PB6 GPIO_ACTIVE_LOW>;
+			debounce-interval = <20>;
+		};
+		key5 {
+			label = "Key 5";
+			linux,code = <BTN_5>;
+			gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_HIGH>;
+			debounce-interval = <20>;
+		};
+	};
+
+	dual-battery-control {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&dual_battery_b0_pin
+			     &dual_battery_b7_pin
+			     &dual_battery_c2_pin>;
+
+		dual-battery-b0 {
+			label = "dual_battery_b0";
+			gpios = <&gpio1 RK_PB0 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "off";
+		};
+
+		dual-battery-b7 {
+			label = "dual_battery_b7";
+			gpios = <&gpio1 RK_PB7 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "off";
+		};
+
+		dual-battery-c2 {
+			label = "dual_battery_c2";
+			gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "off";
+		};
+	};
+
+	/* HPM reset and boot control */
+	hpm_control: hpm-control {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&hpm_reset_gpio &hpm_boot_en_gpio>;
+
+		hpm-reset {
+			label = "hpm_reset";
+			gpios = <&gpio4 RK_PB5 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "on";
+		};
+
+		hpm-boot-enable {
+			label = "hpm_boot_enable";
+			gpios = <&gpio1 RK_PC6 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "default-on";
+			default-state = "on";
+		};
+	};
+};
+
+&gpio1 {
+	gpio1_d2_low: gpio1-d2-low-hog {
+		gpio-hog;
+		gpios = <RK_PD2 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "gpio1_d2_low";
+	};
+
+	gpio1_c4_low: gpio1-c4-low-hog {
+		gpio-hog;
+		gpios = <RK_PC4 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "gpio1_c4_low";
+	};
+};
+
+/* Disable gmac1 as the pro has a PCIe attached NIC */
+&gmac1 {
+	status = "disabled";
+};
+
+/* ROBOPI2 has no hdmi */
+&hdmi0 {
+	status = "disabled";
+};
+
+/* ROBOPI2 routes the HYM8563 RTC to i2c1 instead of the inherited i2c6. */
+/delete-node/ &hym8563;
+/delete-node/ &es8388;
+/delete-node/ &usbc0;
+
+// &i2c0 is pmic
+
+&i2c1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1m2_xfer>;
+
+	hym8563: hym8563@51 {
+		compatible = "haoyu,hym8563";
+		reg = <0x51>;
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+		clock-output-names = "hym8563";
+		pinctrl-names = "default";
+		pinctrl-0 = <&hym8563_int>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PB0 IRQ_TYPE_LEVEL_LOW>;
+		status = "okay";
+	};
+};
+
+// &i2c2 is pmic
+
+&i2c3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3m0_xfer>;
+	status = "disabled";
+};
+
+&i2c4 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c4m3_xfer>;
+};
+
+&i2c5 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c5m3_xfer>;
+};
+
+&i2c6 {
+	status = "disabled";
+};
+
+&i2c7 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c7m3_xfer>;
+};
+
+/*
+ * i2s1_8ch uses i2s1m0 which occupies GPIO4_PA0 (CLKREQ#) and GPIO4_PA1
+ * (WAKE#) needed for the NVMe M.2 slot. Disable it; audio is on i2s2_2ch.
+ */
+&i2s1_8ch {
+	status = "disabled";
+};
+
+/* Audio codec on i2s2, m1 mux; add mclk pin to the base pinctrl */
+&i2s2_2ch {
+	status = "disabled";
+};
+
+&spi0 {
+	status = "disabled";
+    assigned-clocks = <&cru CLK_SPI0>;
+    assigned-clock-rates = <200000000>;
+};
+
+&spi1 {
+	status = "disabled";
+	assigned-clocks = <&cru CLK_SPI1>;
+	assigned-clock-rates = <200000000>;
+};
+
+&spi2 {
+	pmic@0 {
+		rockchip,reset-mode = <1>;
+	};
+};
+
+&sata0 {
+	status = "disabled";
+};
+
+/* Enable NVMe */
+&pcie2x1l1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie30x1m1_1_clkreqn &pcie30x1m1_1_waken>;
+	reset-gpios = <&gpio4 RK_PA2 GPIO_ACTIVE_HIGH>;
+	supports-clkreq;
+	status = "disabled";
+};
+
+/* Enable NIC */
+&pcie2x1l2 {
+	reset-gpios = <&gpio3 RK_PD1 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	// pcie@0,0 {
+	// 	reg = <0x00400000 0 0 0 0>;
+	// 	#address-cells = <3>;
+	// 	#size-cells = <2>;
+	// 	ranges;
+	// 	device_type = "pci";
+	// 	bus-range = <0x40 0x4f>;
+
+	// 	rtl8125_0: ethernet@0,0 {
+	// 		compatible = "pci10ec,8125";
+	// 		reg = <0x00410000 0 0 0 0>;
+	// 	};
+	// };
+};
+
+&pinctrl {
+
+	realtek-switch {
+		rtl8367_smi_pins: rtl8367-smi-pins {
+			rockchip,pins =
+				<4 RK_PB1 RK_FUNC_GPIO &pcfg_pull_up>,
+				<4 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	usb-typec {
+		usbc0_int: usbc0-int {
+			rockchip,pins = <4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+
+		typec5v_pwren: typec5v-pwren {
+			rockchip,pins = <4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	usb {
+		vcc5v0_typec_en: vcc5v0-typec-en {
+			rockchip,pins = <4 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		vcc3v3_usb2_hub_en: vcc3v3-usb2-hub-en {
+			rockchip,pins = <4 RK_PC0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		vcc5v0_host_en: vcc5v0-host-en {
+			rockchip,pins = <4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	sdio-pwrseq {
+		wifi_enable_h: wifi-enable-h {
+			rockchip,pins = <0 RK_PD0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	wireless-bluetooth {
+		uart9_gpios: uart9-gpios {
+			rockchip,pins = <3 RK_PD2 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		bt_reset_gpio: bt-reset-gpio {
+			rockchip,pins = <0 RK_PD3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		bt_wake_gpio: bt-wake-gpio {
+			rockchip,pins = <0 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		bt_irq_gpio: bt-irq-gpio {
+			rockchip,pins = <0 RK_PC5 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+	};
+
+	wireless-wlan {
+		wifi_host_wake_irq: wifi-host-wake-irq {
+			rockchip,pins = <0 RK_PA0 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+	};
+
+	fan {
+		fan_enable_gpio: fan-enable-gpio {
+			rockchip,pins = <1 RK_PD7 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	hpm-control {
+		hpm_reset_gpio: hpm-reset-gpio {
+			rockchip,pins = <4 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		hpm_boot_en_gpio: hpm-boot-en-gpio {
+			rockchip,pins = <1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	gpio-keys {
+		key1_pin: key1-pin {
+			rockchip,pins = <3 RK_PB1 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		key2_pin: key2-pin {
+			rockchip,pins = <3 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		key3_pin: key3-pin {
+			rockchip,pins = <3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		key4_pin: key4-pin {
+			rockchip,pins = <3 RK_PB6 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		key5_pin: key5-pin {
+			rockchip,pins = <1 RK_PD5 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+	};
+
+	dual-battery-control {
+		dual_battery_b0_pin: dual-battery-b0-pin {
+			rockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+
+		dual_battery_b7_pin: dual-battery-b7-pin {
+			rockchip,pins = <1 RK_PB7 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+
+		dual_battery_c2_pin: dual-battery-c2-pin {
+			rockchip,pins = <0 RK_PC2 RK_FUNC_GPIO &pcfg_pull_down_drv_level_5>;
+		};
+	};
+};
+
+&pwm0 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm0m2_pins>;
+	status = "okay";
+};
+
+&pwm1 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm1m2_pins>;
+	status = "disabled";
+};
+
+&pwm3 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm3m3_pins>;
+	status = "okay";
+};
+
+//led dengdai
+&pwm6 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm6m1_pins>;
+	status = "okay";
+};
+
+&pwm10 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm10m1_pins>;
+	status = "okay";
+};
+
+&pwm11 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm11m2_pins>;
+	status = "disabled";
+};
+
+&pwm13 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm13m2_pins>;
+	status = "disabled";
+};
+
+&pwm14 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm14m0_pins>;
+	status = "okay";
+};
+
+// dengdai
+&pwm15 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm15m2_pins>;
+	status = "okay";
+};
+
+&sdhci {
+	/delete-property/ vmmc-supply;
+	bus-width = <8>;
+	no-sdio;
+	no-sd;
+	non-removable;
+	max-frequency = <200000000>;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	status = "okay";
+};
+
+&sdmmc {
+	/delete-property/ vmmc-supply;
+	/delete-property/ vqmmc-supply;
+	status = "disabled";
+};
+
+/* Disable SPI Flash — pins muxed with eMMC */
+&sfc {
+	status = "disabled";
+};
+
+/* Enable SDIO for WiFi/Bluetooth Card */
+&sdio {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	bus-width = <4>;
+	cap-sd-highspeed;
+	cap-sdio-irq;
+	keep-power-in-suspend;
+	max-frequency = <150000000>;
+	mmc-pwrseq = <&sdio_pwrseq>;
+	no-mmc;
+	no-sd;
+	non-removable;
+	sd-uhs-sdr104;
+	status = "okay";
+
+	ap6256: wifi@1 {
+		compatible = "brcm,bcm43456-fmac", "brcm,bcm4329-fmac";
+		reg = <1>;
+		interrupt-names = "host-wake";
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PA0 IRQ_TYPE_LEVEL_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_host_wake_irq>;
+	};
+};
+
+&uart0 {
+	status = "disabled";
+	pinctrl-0 = <&uart1m1_xfer>;
+};
+
+&uart1 {
+	status = "disabled";
+	pinctrl-0 = <&uart1m1_xfer>;
+};
+
+// &uart2 as uart login
+
+// bms log
+&uart3 {
+	status = "okay";
+	pinctrl-0 = <&uart3m0_xfer>;
+};
+
+// hpm log
+&uart4 {
+	status = "okay";
+	pinctrl-0 = <&uart4m2_xfer>;
+};
+
+&uart5 {
+	status = "disabled";
+	pinctrl-0 = <&uart5m2_xfer>;
+};
+
+// yuliu uart
+&uart6 {
+	status = "okay";
+	pinctrl-0 = <&uart6m2_xfer>;
+};
+
+// stm32 485
+&uart7 {
+	status = "okay";
+	pinctrl-0 = <&uart7m2_xfer>;
+};
+
+/* UART8 pins overlap the AP6256 SDIO M1 pins (GPIO3-2); keep UART8 disabled. */
+&uart8 {
+	status = "disabled";
+};
+
+/* Enable UART for Bluetooth */
+&uart9 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart9m2_xfer &uart9m2_ctsn &uart9m2_rtsn>;
+	uart-has-rtscts;
+	status = "okay";
+
+	bluetooth {
+		compatible = "brcm,bcm4345c5";
+		clock-names = "lpo";
+		device-wakeup-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+		interrupt-names = "host-wakeup";
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PC5 IRQ_TYPE_LEVEL_HIGH>;
+		max-speed = <1500000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_irq_gpio &bt_wake_gpio>;
+		shutdown-gpios = <&gpio0 RK_PD3 GPIO_ACTIVE_HIGH>;
+		vbat-supply = <&vcc_3v3_s3>;
+		vddio-supply = <&vcc_1v8_s3>;
+	};
+};
+
+/* USB2 OTG PHY for usb_host0_xhci; phy-supply enables VBUS to USB3 Type-A port */
+&u2phy0_otg {
+	status = "okay";
+	// phy-supply = <&vcc5v0_host>;
+};
+
+/*
+ * The Pro's USB-C port is power delivery only: no FUSB302, no data lines,
+ * no alt-mode switching. The parent DTSI enables usbdp_phy0 (status = "okay")
+ * and adds FUSB302 alt-mode/orientation properties; delete those here.
+ *
+ * dp-lane-mux = <0 1>: PHY lanes 0/1 are DP (physically routed to the
+ * LT8711UXD DP→HDMI2 bridge), lanes 2/3 are USB3 SuperSpeed (physically
+ * routed to the USB3 Type-A port P3). Without this property the driver
+ * defaults to USB-only mode and places USB3 on lanes 0/1, which do not
+ * reach the Type-A connector and makes the USB3 port non-functional.
+ */
+&usbdp_phy0 {
+	status = "disabled";
+	rockchip,dp-lane-mux = <0 1>;
+	/delete-property/ mode-switch;
+	/delete-property/ orientation-switch;
+	/delete-property/ sbu1-dc-gpios;
+	/delete-property/ sbu2-dc-gpios;
+	/delete-node/ port;
+};
+
+/* USB3 Type-A port*/
+&usb_host0_xhci {
+	/* Use the USB-C connector in device/peripheral mode for ADB gadget. */
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+	phys = <&u2phy0_otg>;
+	phy-names = "usb2-phy";
+	/delete-property/ usb-role-switch;
+	status = "okay";
+	/delete-node/ port;
+};
+
+&usb_host2_xhci {
+	status = "okay";
+};
+
+/* Experimental: Enable DisplayPort 1.4 to HDMI 2.0 */
+&dp0 {
+	status = "disabled";
+};
+
+&dp0_in {
+	dp0_in_vp2: endpoint {
+		remote-endpoint = <&vp2_out_dp0>;
+	};
+};
+
+&dp0_out {
+	dp0_out_con: endpoint {
+		remote-endpoint = <&dp_con_in>;
+	};
+};
+
+&vp2 {
+	vp2_out_dp0: endpoint@a {
+		reg = <ROCKCHIP_VOP2_EP_DP0>;
+		remote-endpoint = <&dp0_in_vp2>;
+	};
+}; 
+
+&can0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&can0m1_pins>;
+	assigned-clocks = <&cru CLK_CAN0>;
+	assigned-clock-rates = <200000000>;
+};
+
+&can1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&can1m1_pins>;
+	assigned-clocks = <&cru CLK_CAN1>;
+	assigned-clock-rates = <200000000>;
+};
+
+&can2 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&can2m0_pins>;
+	assigned-clocks = <&cru CLK_CAN2>;
+	assigned-clock-rates = <200000000>;
+};
