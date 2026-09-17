@@ -1,0 +1,10 @@
+config:
+  name: hobot-x5-rt-6.1
+  kind: kernel
+  type: vendor-rt
+  branch: x5-kernel
+  maintainers:
+    - { github: wentywenty, name: wentywenty }
+  patches-to-git:
+    do-not-commit-files:
+      - "MAINTAINERS"

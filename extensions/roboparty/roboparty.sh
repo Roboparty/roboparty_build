@@ -1,14 +1,21 @@
 function post_customize_image__install_roboparty() {
 	[[ "${BUILD_ROBOPARTY_PACKAGES}" == "yes" ]] || return 0
-	local roboparty_dist="${BOARD}"
-	# case "${roboparty_dist}" in robopi1|robopi2|robopi3) ;; *) return 0 ;; esac
+
+	# TODO: the RDK X5 should also enable its board suite (robopi0) once it is
+	# published on apt.roboparty.com; only "common" exists today, so the
+	# board-specific suite is disabled below.
+	# local roboparty_dist
+	# case "${BOARD}" in
+	# 	rdk-x5) roboparty_dist="robopi0" ;;
+	# 	*)      roboparty_dist="${BOARD}" ;;
+	# esac
 
 	install -d "${SDCARD}/usr/share/keyrings" "${SDCARD}/etc/apt/sources.list.d"
 	curl -fsSL "http://apt.roboparty.com/roboparty.gpg" | gpg --dearmor --yes -o "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
 	chmod 644 "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
 	cat > "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
 		deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] http://apt.roboparty.com common main
-		deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] http://apt.roboparty.com ${roboparty_dist} main
+		# deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] http://apt.roboparty.com \${roboparty_dist} main
 	EOF
 	chroot_sdcard_apt_get_update
 	# Bring the base rootfs up to date after adding the RoboParty repository.

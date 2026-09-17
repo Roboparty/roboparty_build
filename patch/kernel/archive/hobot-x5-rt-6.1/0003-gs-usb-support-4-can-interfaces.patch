@@ -1,0 +1,36 @@
+From: Armbian Build Framework <build@armbian.com>
+Subject: [PATCH] can: gs_usb: support up to 4 CAN interfaces
+
+The RDK X5 ships a USB-to-CAN adapter that exposes four CAN channels. The
+mainline driver caps the number of interfaces per device at three, so the
+fourth channel is rejected during probe:
+
+    gs_usb 1-1:1.0: Driver cannot handle more that 3 CAN interfaces
+
+Raise GS_MAX_INTF to four. This mirrors the vendor SDK change carried as
+roboparty_rdk/build_params/gs_usb.patch so the same adapter works on the
+Armbian port.
+
+Signed-off-by: Armbian Build Framework <build@armbian.com>
+---
+ drivers/net/can/usb/gs_usb.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/can/usb/gs_usb.c b/drivers/net/can/usb/gs_usb.c
+index 264a0f7..fd929ef 100644
+--- a/drivers/net/can/usb/gs_usb.c
++++ b/drivers/net/can/usb/gs_usb.c
+@@ -278,9 +278,9 @@ struct gs_host_frame {
+ /* Only launch a max of GS_MAX_RX_URBS usb requests at a time. */
+ #define GS_MAX_RX_URBS 30
+ /* Maximum number of interfaces the driver supports per device.
+- * Current hardware only supports 3 interfaces. The future may vary.
++ * Current hardware only supports 4 interfaces. The future may vary.
+  */
+-#define GS_MAX_INTF 3
++#define GS_MAX_INTF 4
+ 
+ struct gs_tx_context {
+ 	struct gs_can *dev;
+-- 
+2.43.0

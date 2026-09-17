@@ -57,10 +57,10 @@ function post_family_tweaks__ugreen_aic8800_files() {
 	[[ -f "${udev_rules}" ]] || exit_with_error "UGREEN AIC8800" "Missing ${udev_rules}"
 	display_alert "UGREEN AIC8800" "Installing firmware and udev configuration" "info"
 	install -d -m 0755 \
-		"${destination}/lib/firmware" \
-		"${destination}/etc/udev/rules.d" \
-		"${destination}/etc/modules-load.d"
-	cp -a "${source_root}/fw/aic8800DC" "${destination}/lib/firmware/"
-	install -m 0644 "${udev_rules}" "${destination}/etc/udev/rules.d/99-ugreen-aic8800.rules"
-	printf '%s\n' aic_load_fw aic8800_fdrv > "${destination}/etc/modules-load.d/ugreen-aic8800.conf"
+		"${SDCARD}/lib/firmware" \
+		"${SDCARD}/etc/udev/rules.d" \
+		"${SDCARD}/etc/modules-load.d"
+	cp -a "${source_root}/fw/aic8800DC" "${SDCARD}/lib/firmware/"
+	install -m 0644 "${udev_rules}" "${SDCARD}/etc/udev/rules.d/99-ugreen-aic8800.rules"
+	printf '%s\n' aic_load_fw aic8800_fdrv > "${SDCARD}/etc/modules-load.d/ugreen-aic8800.conf"
 }

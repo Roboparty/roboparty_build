@@ -1,4 +1,4 @@
-name: Build robopi2 image
+name: Build robopi2 kernel debs
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: robopi2 / noble / current
+    name: robopi2 / current / kernel debs
     runs-on: [self-hosted, a100]
     steps:
       - name: Fix workspace permissions
@@ -45,27 +45,22 @@ jobs:
           sudo apt-get update -o DPkg::Lock::Timeout=600
           sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache device-tree-compiler debootstrap git qemu-user-static rsync zstd
 
-      - name: Build
+      - name: Build kernel debs
         run: |
-          ./compile.sh build \
+          ./compile.sh kernel \
             BOARD=robopi2 \
             BRANCH=current \
-            RELEASE=noble \
-            CUSTOM_UBUNTU_MIRROR_PORTS=repo.huaweicloud.com/ubuntu-ports/ \
-            BUILD_DESKTOP=no \
-            BUILD_MINIMAL=no \
             KERNEL_CONFIGURE=no \
-            VENDOR=roboparty-os \
-            PACKAGE_LIST_RM=armbian-zsh
+            GHCR_MIRROR=nju
 
-      - name: Collect DEBs
+      - name: Collect kernel DEBs
         run: |
           mkdir -p output/release-debs
-          find output/debs -type f -name '*.deb' -exec cp -p {} output/release-debs/ \;
+          find output/debs -type f -name 'linux-*.deb' -exec cp -p {} output/release-debs/ \;
 
-      - name: Upload artifacts
+      - name: Upload kernel DEBs
         uses: actions/upload-artifact@v4
         with:
-          name: debs-robopi2-current
+          name: kernel-debs-robopi2-current
           path: output/release-debs/
           retention-days: 7

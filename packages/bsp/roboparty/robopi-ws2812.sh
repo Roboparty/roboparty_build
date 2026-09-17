@@ -33,6 +33,6 @@ function pre_package_kernel_image__robopi2_ws2812() {
 
 # Load the board driver automatically during boot.
 function post_family_tweaks__robopi2_ws2812_autoload() {
-	install -d -m 0755 "${destination}/etc/modules-load.d"
-	printf '%s\n' 'robopi-ws2812' > "${destination}/etc/modules-load.d/robopi-ws2812.conf"
+	install -d -m 0755 "${SDCARD}/etc/modules-load.d"
+	printf '%s\n' 'robopi-ws2812' > "${SDCARD}/etc/modules-load.d/robopi-ws2812.conf"
 }

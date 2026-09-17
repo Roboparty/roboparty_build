@@ -1,0 +1,23 @@
+From: Armbian Build Framework <build@armbian.com>
+Subject: [PATCH] drm: vs: mark UAPI header with Linux syscall exception
+
+The headers_install target rejects GPL-only UAPI headers.  Match the SPDX
+identifier used by other exported DRM UAPI headers so Armbian can package
+linux-libc-dev from the vendor kernel.
+
+---
+ include/uapi/drm/vs_drm.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/uapi/drm/vs_drm.h b/include/uapi/drm/vs_drm.h
+index f66f7669..be602d13 100644
+--- a/include/uapi/drm/vs_drm.h
++++ b/include/uapi/drm/vs_drm.h
+@@ -1,4 +1,4 @@
+-/* SPDX-License-Identifier: GPL-2.0 */
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
+ /*
+  * Copyright (C) 2020 VeriSilicon Holdings Co., Ltd.
+  */
+-- 
+2.34.1

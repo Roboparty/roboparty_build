@@ -1,0 +1,18 @@
+From: Armbian Build Framework <build@armbian.com>
+Subject: [PATCH] rt: expose the RT suffix to Armbian version detection
+
+Armbian's kernel version helper reads localversion-next before packaging.
+Kbuild reads either localversion filename, so use the name understood by both
+and keep the resulting -rt28 kernel release unchanged.
+
+---
+ localversion-rt => localversion-next | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ rename localversion-rt => localversion-next (100%)
+
+diff --git a/localversion-rt b/localversion-next
+similarity index 100%
+rename from localversion-rt
+rename to localversion-next
+-- 
+2.34.1

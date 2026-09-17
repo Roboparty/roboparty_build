@@ -1,0 +1,7 @@
+verbosity=7
+console=both
+rootdev=LABEL=rootfs
+rootfstype=ext4
+docker_optimizations=on
+extraargs=
+extraboardargs=

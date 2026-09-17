@@ -41,7 +41,17 @@ configure_common_rootfs() {
     fi
     chown -R "${user_name}:${user_group}" "${user_home}"
     chmod 0755 "${user_home}"
-    usermod --append --groups "sudo,dialout,video,plugdev,${realtime_group}" "${user_name}" 2>/dev/null || true
+    usermod --append --groups "sudo,dialout,video,plugdev" "${user_name}" 2>/dev/null || true
+
+    # Device-access and realtime groups. Add them one by one: `usermod --groups`
+    # fails as a whole if any single group is missing, which would otherwise
+    # silently drop all of them (including the realtime group backing the
+    # rtprio/memlock limits below).
+    local device_group
+    for device_group in input audio render systemd-journal "${realtime_group}"; do
+        getent group "${device_group}" >/dev/null 2>&1 || continue
+        usermod --append --groups "${device_group}" "${user_name}" 2>/dev/null || true
+    done
 
     # Set initial credentials for administrative and regular access.
     # The user can change them after first login with `passwd`.
@@ -65,11 +75,27 @@ EOF
 @${realtime_group} - memlock unlimited
 EOF
 
+    # Force the performance governor.  Armbian's armbian-hardware-optimization
+    # service applies this file at boot and deliberately ignores ENABLE, so a
+    # governor override here does take effect even without cpufrequtils.
+    # MIN_SPEED/MAX_SPEED are left to the per-board values written by
+    # distro-agnostic.sh (CPUMIN/CPUMAX).  BOOST=true is required to expose
+    # turbo OPPs (e.g. the RDK X5 1.8 GHz point), otherwise scaling_max_freq
+    # clamps them away.
     install -d -m 0755 /etc/default
     if [[ -f /etc/default/cpufrequtils ]]; then
-        sed -i "s/^GOVERNOR=.*/GOVERNOR=performance/" /etc/default/cpufrequtils
+        sed -i -e "s/^GOVERNOR=.*/GOVERNOR=performance/" \
+               -e "s/^BOOST=.*/BOOST=true/" /etc/default/cpufrequtils
+        grep -q "^GOVERNOR=" /etc/default/cpufrequtils || printf "GOVERNOR=performance\n" >> /etc/default/cpufrequtils
+        grep -q "^BOOST=" /etc/default/cpufrequtils || printf "BOOST=true\n" >> /etc/default/cpufrequtils
     else
-        printf "GOVERNOR=performance\n" > /etc/default/cpufrequtils
+        cat > /etc/default/cpufrequtils <<'EOF'
+ENABLE=false
+MIN_SPEED=
+MAX_SPEED=
+GOVERNOR=performance
+BOOST=true
+EOF
     fi
 
     # Generate unique SSH host keys during first boot, never in shared cache.

@@ -1,0 +1,91 @@
+From: Armbian Build Framework <build@armbian.com>
+Subject: [PATCH] can: gs_usb: keep RX URBs alive after transient USB errors
+
+USB CAN RX bulk transfers can occasionally complete with transient USB
+errors such as -EOVERFLOW. Returning from the completion callback in that
+case permanently drops one RX URB. After enough such events, all RX URBs
+can be exhausted and receive traffic stops.
+
+Resubmit RX URBs after recoverable USB errors and allow a diagnostic
+module parameter to raise the RX URB buffer size floor to 512 bytes.
+
+This is the 6.1 vendor-kernel port of the fix carried as
+general-gs-usb-resubmit.patch for rockchip64-6.18. The resubmit path is
+switched from dev->parent->hf_size_rx to usbcan->hf_size_rx because the
+new error cases jump to resubmit_urb before dev is assigned; usbcan is the
+URB context and is always dev->parent, so the value is unchanged.
+
+Signed-off-by: Armbian Build Framework <build@armbian.com>
+---
+ drivers/net/can/usb/gs_usb.c | 37 +++++++++++++++++++++++++++++++++----
+ 1 file changed, 33 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/can/usb/gs_usb.c b/drivers/net/can/usb/gs_usb.c
+index fd929ef..0a936f0 100644
+--- a/drivers/net/can/usb/gs_usb.c
++++ b/drivers/net/can/usb/gs_usb.c
+@@ -282,6 +282,24 @@ struct gs_host_frame {
+  */
+ #define GS_MAX_INTF 4
+ 
++static unsigned int rx_buffer_bytes;
++module_param(rx_buffer_bytes, uint, 0444);
++MODULE_PARM_DESC(rx_buffer_bytes,
++		 "Diagnostic receive buffer floor in bytes (0 or 512)");
++
++static atomic_t rx_error_count = ATOMIC_INIT(0);
++static int gs_usb_atomic_get(char *buffer, const struct kernel_param *kp)
++{
++	return scnprintf(buffer, PAGE_SIZE, "%d\n", atomic_read(kp->arg));
++}
++
++static const struct kernel_param_ops gs_usb_atomic_ops = {
++	.get = gs_usb_atomic_get,
++};
++module_param_cb(rx_error_count, &gs_usb_atomic_ops,
++		&rx_error_count, 0444);
++MODULE_PARM_DESC(rx_error_count, "Recoverable RX URB error count");
++
+ struct gs_tx_context {
+ 	struct gs_can *dev;
+ 	unsigned int echo_id;
+@@ -540,9 +558,15 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
+ 		break;
+ 	case -ENOENT:
+ 	case -ESHUTDOWN:
++	case -ECONNRESET:
+ 		return;
++	case -EOVERFLOW:
++	case -EPROTO:
++	case -EILSEQ:
++		atomic_inc(&rx_error_count);
++		goto resubmit_urb;
+ 	default:
+-		/* do not resubmit aborted urbs. eg: when device goes down */
++		/* Do not resubmit unknown errors or aborted URBs. */
+ 		return;
+ 	}
+ 
+@@ -642,7 +666,7 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
+  resubmit_urb:
+ 	usb_fill_bulk_urb(urb, usbcan->udev,
+ 			  usb_rcvbulkpipe(usbcan->udev, GS_USB_ENDPOINT_IN),
+-			  hf, dev->parent->hf_size_rx,
++			  hf, usbcan->hf_size_rx,
+ 			  gs_usb_receive_bulk_callback, usbcan);
+ 
+ 	rc = usb_submit_urb(urb, GFP_ATOMIC);
+@@ -1415,6 +1439,11 @@ static int gs_usb_probe(struct usb_interface *intf,
+ 		}
+ 		dev->hf_size_rx = max(dev->hf_size_rx, hf_size_rx);
+ 	}
++	if (rx_buffer_bytes == 512)
++		dev->hf_size_rx = max(dev->hf_size_rx, rx_buffer_bytes);
++	else if (rx_buffer_bytes)
++		dev_warn(&intf->dev, "unsupported rx_buffer_bytes=%u\n",
++			 rx_buffer_bytes);
+ 
+ 	return 0;
+ }
+-- 
+2.43.0
