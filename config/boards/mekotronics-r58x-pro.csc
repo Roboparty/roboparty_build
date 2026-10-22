@@ -12,10 +12,12 @@ declare -g BOOT_SOC="rk3588"
 declare -g IMAGE_PARTITION_TABLE="gpt"
 # Does not have a UEFI_EDK2_BOARD_ID
 
-if [[ "${BRANCH}" == "vendor" || "${BRANCH}" == "legacy" ]]; then
+enable_extension "uboot-mainline-mmc-env-storage" # store u-boot env in mmc (boot0/boot1)
+
+if [[ "${BRANCH}" == vendor* ]]; then
 	# Attention: does _not_ use the vendor/mekotronics shared config anymore; mainline u-boot also for vendor kernel.
 
-	display_alert "$BOARD" "vendor/legacy configuration applied for $BOARD / $BRANCH" "info"
+	display_alert "$BOARD" "vendor configuration applied for $BOARD / $BRANCH" "info"
 	declare -g BOOT_FDT_FILE="rockchip/rk3588-blueberry-edge-v12-maizhuo-linux.dtb" # different for vendor
 
 	# For the bluetooth
@@ -36,8 +38,8 @@ function post_family_config__meko_r58x_pro_use_mainline_uboot() {
 	declare -g BOOTCONFIG="mekotronics-r58x-pro-rk3588_defconfig" # mainline
 	declare -g BOOTDELAY=1
 	declare -g BOOTSOURCE="https://github.com/u-boot/u-boot.git"
-	declare -g BOOTBRANCH="tag:v2026.07"
-	declare -g BOOTPATCHDIR="v2026.07"
+	declare -g BOOTBRANCH="tag:v2026.10"
+	declare -g BOOTPATCHDIR="v2026.10"
 	declare -g BOOTDIR="u-boot-${BOARD}"
 
 	declare -g UBOOT_TARGET_MAP="BL31=bl31.elf ROCKCHIP_TPL=${RKBIN_DIR}/${DDR_BLOB};;u-boot-rockchip.bin"
@@ -63,7 +65,7 @@ function pre_config_uboot_target__meko_r58x_pro_patch_rockchip_common_boot_order
 
 function pre_config_uboot_target__meko_r58x_pro_patch_uboot_dtsi_for_ums() {
 	display_alert "u-boot for ${BOARD}" "u-boot: add to u-boot dtsi for UMS" "info" # avoid a patch, just append to the dtsi file
-	# Append to the t6 u-boot dtsi file with stuff for enabling gadget/otg/peripheral mode
+	# Create the meko-r58x-pro u-boot dtsi file with stuff for enabling gadget/otg/peripheral mode
 	cat <<- EOD >> arch/arm/dts/rk3588-mekotronics-r58x-pro-u-boot.dtsi
 		#include "rk3588-generic-u-boot.dtsi"
 		&u2phy0 { status = "okay"; };
@@ -108,6 +110,12 @@ function post_config_uboot_target__extra_configs_for_meko_r58x_pro_mainline_envi
 	run_host_command_logged scripts/config --enable CONFIG_CMD_MII
 	run_host_command_logged scripts/config --enable CONFIG_NET_LWIP
 
+	display_alert "u-boot for ${BOARD}/${BRANCH}" "u-boot: enable MBed TLS stuff" "info"
+	run_host_command_logged scripts/config --enable CONFIG_WGET_HTTPS
+	run_host_command_logged scripts/config --enable CONFIG_WGET_CACERT
+	#run_host_command_logged scripts/config --enable CONFIG_WGET_BUILTIN_CACERT # not yet
+	run_host_command_logged scripts/config --enable CONFIG_MBEDTLS_LIB
+
 	# UMS, RockUSB, gadget stuff
 	display_alert "u-boot for ${BOARD}/${BRANCH}" "u-boot: enable UMS/RockUSB gadget" "info"
 	declare -a enable_configs=("CONFIG_CMD_USB_MASS_STORAGE" "CONFIG_USB_GADGET" "USB_GADGET_DOWNLOAD" "CONFIG_USB_FUNCTION_ROCKUSB" "CONFIG_USB_FUNCTION_ACM" "CONFIG_CMD_ROCKUSB")
@@ -116,6 +124,8 @@ function post_config_uboot_target__extra_configs_for_meko_r58x_pro_mainline_envi
 	done
 	# Auto-enabled by the above, force off...
 	run_host_command_logged scripts/config --disable USB_FUNCTION_FASTBOOT
+
+	return 0
 }
 
 # Small systemd service and timer to drive the LCD display with the hour-minute of the current time.

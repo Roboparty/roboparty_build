@@ -19,15 +19,15 @@
 # tree already has two other extensions for it. Both of those install prebuilt
 # DKMS debs from third-party release pages - brostrend-aic8800-dkms.sh from
 # Shadowrom2020/aic8800-dkms, radxa-aic8800.sh from radxa-pkg/aic8800, the latter
-# skipping itself on kernels 7.2 and newer. Neither can serve this board, so this
+# skipping itself on kernels 7.3 and newer. Neither can serve this board, so this
 # extension takes the other route: the vendor driver out of Milk-V's
 # duo-buildroot-sdk-v2, as cleaned up for modern kernels by queenkjuul, copied
 # into the kernel tree and built as ordinary in-tree modules. That is much
 # cheaper than DKMS under qemu, needs no headers package on the target, and is
-# what makes 7.2 work.
+# what makes 7.2 and 7.3 work.
 #
-# What is not board-specific is shared rather than duplicated: the two build
-# fixes live in patch/misc/aic8800/ next to the other driver patches. The
+# What is not board-specific is shared rather than duplicated: the build fixes
+# live in patch/misc/aic8800/ next to the other driver patches. The
 # Bluetooth attach script and unit are not shared - they resolve the UART by
 # hardware address, which only this board needs - so they sit with the rest of
 # the family's BSP files in packages/bsp/sophgo-sg200x/ rather than in the
@@ -52,20 +52,11 @@ declare -g AIC8800_REF="commit:ccf8fd059f70384fae4878c1048603510c2df700"
 #   modprobe aic8800_bsp aic_fw_path=/some/other/dir
 declare -g AIC8800_FW_DIR="/lib/firmware/aic8800/SDIO/aic8800D80"
 
-function post_family_config__sophgo_sg200x_aic8800_fetch() {
+function post_family_config__sophgo_sg200x_aic8800_src_dir() {
 	# The source dir is a deterministic path off the pinned ref; always declare it.
+	# The driver itself is only fetched when the kernel really builds - see
+	# custom_kernel_config below.
 	declare -g AIC8800_SRC_DIR="${SRC}/cache/sources/aic8800-milkv-duos/${AIC8800_REF#*:}"
-
-	# Don't fetch during config-dump / version calculation. post_family_config
-	# also runs under `config-dump-json` (CONFIG_DEFS_ONLY=yes), which the
-	# inventory runs in parallel for every board×branch; a real git fetch here
-	# has no kernel tree to feed and races on the global git config
-	# (`git config --global --add safe.directory ...` -> exit 128), which then
-	# breaks the whole inventory. The driver is fetched for real when the kernel
-	# builds (custom_kernel_config, guarded on a present .config).
-	[[ "${CONFIG_DEFS_ONLY}" == "yes" ]] && return 0
-
-	fetch_from_repo "${AIC8800_REPO}" "aic8800-milkv-duos" "${AIC8800_REF}" "yes"
 }
 
 function custom_kernel_config__sophgo_sg200x_aic8800_modules() {
@@ -87,6 +78,17 @@ function custom_kernel_config__sophgo_sg200x_aic8800_modules() {
 
 	# Also called during config dumping / version calculation, with no kernel tree.
 	[[ ! -f .config ]] && return 0
+
+	# Fetch here and nowhere earlier. post_family_config runs for every command
+	# that loads this board - config-dump-json across the inventory, and the
+	# `download-artifact` calls the repo job makes for bsp-cli / images - often
+	# many at once; a git fetch there has nothing to feed and races on the global
+	# git config (`git config --global --add safe.directory ...` -> exit 128),
+	# failing the whole command. fetch_from_repo changes directory; the rest of
+	# this function works relative to the kernel tree, so come back.
+	declare kernel_cwd="${PWD}"
+	fetch_from_repo "${AIC8800_REPO}" "aic8800-milkv-duos" "${AIC8800_REF}" "yes"
+	cd "${kernel_cwd}" || exit_with_error "SG200x AIC8800" "could not return to ${kernel_cwd}"
 
 	declare wireless_dir="${kernel_work_dir}/drivers/net/wireless"
 	declare driver_dir="${wireless_dir}/aicsemi"
@@ -199,10 +201,6 @@ function post_family_tweaks__sophgo_sg200x_aic8800_modprobe() {
 # baud rate the patch table announces. These go into the BSP package rather than
 # straight into ${SDCARD} because they are executable assets: dpkg then owns them
 # and an armbian-bsp-cli upgrade carries fixes to installed systems.
-#
-# packages/bsp/sophgo-sg200x is hashed into the bsp-cli version by the family
-# config, so edits to either file below give the deb a new version; see the
-# BSP_CLI_EXTRA_HASH_DIRS comment in sophgo-sg200x_common.inc.
 function post_family_tweaks_bsp__sophgo_sg200x_aic8800_bluetooth() {
 	display_alert "SG200x AIC8800" "installing Bluetooth attach service" "info"
 
@@ -215,21 +213,6 @@ function post_family_tweaks_bsp__sophgo_sg200x_aic8800_bluetooth() {
 	run_host_command_logged install -m 0644 \
 		"${SRC}/packages/bsp/sophgo-sg200x/usr/lib/systemd/system/aic8800-bluetooth.service" \
 		"${destination}/usr/lib/systemd/system/aic8800-bluetooth.service"
-}
-
-# The chip has nothing in its efuse, so the driver falls back to a compiled-in MAC
-# address with two random bytes on the end and wlan0 comes up different on every
-# boot. The helper that fixes it belongs to the SoC, not to this chip - the
-# ethernet has the same problem - so it is installed by
-# sophgo-sg200x_common.inc and only the rule is added here. Both land in the same
-# armbian-bsp-cli, so there is no ordering or packaging dependency between them.
-function post_family_tweaks_bsp__sophgo_sg200x_aic8800_stable_mac() {
-	display_alert "SG200x AIC8800" "installing stable Wi-Fi MAC address rule" "info"
-
-	run_host_command_logged install -d -m 0755 "${destination}/etc/udev/rules.d"
-	run_host_command_logged install -m 0644 \
-		"${SRC}/packages/bsp/sophgo-sg200x/etc/udev/rules.d/70-sg200x-stable-mac-wifi.rules" \
-		"${destination}/etc/udev/rules.d/70-sg200x-stable-mac-wifi.rules"
 }
 
 function post_family_tweaks__sophgo_sg200x_aic8800_bluetooth_enable() {

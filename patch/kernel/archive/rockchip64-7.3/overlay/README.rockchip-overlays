@@ -8,7 +8,7 @@ rockchip (Rockchip)
 
 ### Provided overlays:
 
-- i2c7, i2c8, pcie-gen2, spi-spidev, uart4, w1-gpio
+- i2c7, i2c8, pcie-gen2, rk3399-helios64-cpu-stability, spi-spidev, uart4, w1-gpio
 
 for RK3308:
 - b@1,3ghz, bs, bs-1.3ghz, otg-host, uart1, uart2, uart3, s0-ext-antenna
@@ -70,6 +70,24 @@ WARNING! Not officially supported by Rockchip!!!
 
 Adds the 1.5GHz opp for overclocking
 WARNING! Not officially supported by Rockchip!!!
+
+### rk3399-helios64-cpu-stability
+
+Opt-in workaround for reported instability of the Helios64 NAS (Kobol)
+under sustained CPU load. Not enabled by default.
+Raises the A72 big-cluster vcore by 75 mV on opp00..opp06 (408..1608 MHz).
+Overlay voltages: 0.900 / 0.900 / 0.900 / 0.950 / 1.025 / 1.100 / 1.175 V.
+Mainline voltages (rk3399.dtsi): 0.825 / 0.825 / 0.825 / 0.875 / 0.950 /
+1.025 / 1.100 V.
+The 1.8 GHz step keeps the mainline 1.20 V.
+
+Origin: Armbian forum topics 30074 and 58597, by prahal and ebin-dev.
+No upstream patch exists.
+Apply only if your Helios64 crashes or hangs at random.
+
+### rk3399-rock-pi-4-spdif
+
+Enables the S/PDIF output on ROCK Pi 4 boards (header pin 15, SPDIF_TX).
 
 ### rk3399-opp-2ghz
 
@@ -295,3 +313,14 @@ Some NanoPC-T6 boards use a A3A444 eMMC chip. Under heavy I/O load when running
 in HS400 mode, this will often result in I/O errors.
 Reducing the eMMC frequency from the default 200000000 Hz to 150000000 Hz improves
 stability and eliminates the I/O errors.
+
+**********************************
+Details for OrangePi 5 pro overlays  (17 09 2026):
+
+### rockchip-rk3588-orangepi5-pro-restore-fan-param
+
+The default settings of fan for orangepi5 pro is safely set to avoid potention component 
+damage that may occur when using most common or aggresive fans that have bigger watts. 
+However this overlay allow set back to the pwm default, which is useful and even required when 
+you use some low power high tech fans (like Sunon Vapo-Bearing). This overlay also set the cooling 
+duty cycle a bit higher as these fan have smaller cooling power and also make quiet fans more quieter(The fan design is counterintuitive.).

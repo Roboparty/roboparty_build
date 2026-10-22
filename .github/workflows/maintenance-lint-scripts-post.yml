@@ -81,7 +81,7 @@ jobs:
           EOF
 
       - name: Download lint artifacts (no checkout of PR code)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: lint-scripts-results
           run-id: ${{ github.event.workflow_run.id }}
@@ -180,6 +180,24 @@ jobs:
               -f=diff \
               -filter-mode=added \
               -reporter=github-pr-review \
+              -fail-level=none
+
+      - name: Post shfmt whole-file issues as inline review comments
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Missing final newline, CRLF: named by the lint phase as
+          # `file:line: message`. Artifacts from runs older than that step
+          # do not carry the file.
+          [[ -s shfmt-whole-file.txt ]] || exit 0
+          cat shfmt-whole-file.txt | env \
+            GITHUB_EVENT_NAME=pull_request \
+            GITHUB_EVENT_PATH="$FAKE_PR_EVENT_PATH" \
+            reviewdog \
+              -name=shfmt-whole-file \
+              -efm='%f:%l: %m' \
+              -reporter=github-pr-review \
+              -filter-mode=added \
               -fail-level=none
 
       - name: Post shfmt drift as suggestion blocks

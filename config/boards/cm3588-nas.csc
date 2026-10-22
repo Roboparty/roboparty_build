@@ -2,10 +2,9 @@
 BOARD_NAME="FriendlyElec CM3588 NAS"
 BOARD_VENDOR="friendlyelec"
 BOARDFAMILY="rockchip-rk3588"
-BOARD_MAINTAINER="ColorfulRhino"
+BOARD_MAINTAINER=""
 INTRODUCED="2023"
 BOOTCONFIG="cm3588-nas-rk3588_defconfig" # Mainline defconfig, enables booting from NVMe
-BOOT_SOC="rk3588"
 KERNEL_TARGET="current,edge,vendor"
 FULL_DESKTOP="yes"
 BOOT_LOGO="desktop"
@@ -13,6 +12,8 @@ IMAGE_PARTITION_TABLE="gpt"
 BOOT_FDT_FILE="rockchip/rk3588-friendlyelec-cm3588-nas.dtb"
 BOOT_SCENARIO="tpl-blob-atf-mainline"
 UEFI_EDK2_BOARD_ID="nanopc-cm3588-nas" # This _only_ used for uefi-edk2-rk3588 extension; cm3588-nas was introduced in v0.12 of edk2-porting/edk2-rk3588
+
+enable_extension "uboot-mainline-mmc-env-storage" # store u-boot env in mmc (boot0/boot1)
 
 # @TODO: revisit this as it's probably just for vendor kernel
 function post_family_tweaks__cm3588_nas_udev_naming_audios() {
@@ -47,7 +48,7 @@ function post_family_config__cm3588_nas_use_mainline_uboot() {
 
 	# If BRANCH==vendor, use rkbin BL31 ${RKBIN_DIR}/${BL31_BLOB}, otherwise, bl31.elf from mainline ATF/TF-A
 	declare bl31_blob="undetermined"
-	if [[ "${BRANCH}" == "vendor" ]]; then
+	if [[ "${BRANCH}" == vendor* ]]; then
 		display_alert "${BOARD}/${BRANCH}" "Using Rockchip rkbin BL31 blob : ${RKBIN_DIR}/${BL31_BLOB}" "info"
 		bl31_blob="${RKBIN_DIR}/${BL31_BLOB}"
 		declare -g ATF_COMPILE="no" # no need to build mainline it either
@@ -58,8 +59,8 @@ function post_family_config__cm3588_nas_use_mainline_uboot() {
 
 	declare -g BOOTDELAY=1
 	declare -g BOOTSOURCE="https://github.com/u-boot/u-boot.git"
-	declare -g BOOTBRANCH="tag:v2026.07"
-	declare -g BOOTPATCHDIR="v2026.07"
+	declare -g BOOTBRANCH="tag:v2026.10"
+	declare -g BOOTPATCHDIR="v2026.10"
 	declare -g BOOTDIR="u-boot-${BOARD}"
 	declare -g UBOOT_TARGET_MAP="BL31=${bl31_blob} ROCKCHIP_TPL=${RKBIN_DIR}/${DDR_BLOB};;u-boot-rockchip.bin"
 	unset uboot_custom_postprocess write_uboot_platform write_uboot_platform_mtd # Disable stuff from rockchip64_common; we're using binman here which does all the work
@@ -123,6 +124,12 @@ function post_config_uboot_target__extra_configs_for_cm3588-nas_uboot() {
 	display_alert "u-boot for ${BOARD}/${BRANCH}" "u-boot: enable LWIP (new networking stack)" "info"
 	run_host_command_logged scripts/config --enable CONFIG_CMD_MII
 	run_host_command_logged scripts/config --enable CONFIG_NET_LWIP
+
+	display_alert "u-boot for ${BOARD}/${BRANCH}" "u-boot: enable MBed TLS stuff" "info"
+	run_host_command_logged scripts/config --enable CONFIG_WGET_HTTPS
+	run_host_command_logged scripts/config --enable CONFIG_WGET_CACERT
+	#run_host_command_logged scripts/config --enable CONFIG_WGET_BUILTIN_CACERT # not yet
+	run_host_command_logged scripts/config --enable CONFIG_MBEDTLS_LIB
 
 	# UMS, RockUSB, gadget stuff
 	display_alert "u-boot for ${BOARD}/${BRANCH}" "u-boot: enable UMS/RockUSB gadget" "info"

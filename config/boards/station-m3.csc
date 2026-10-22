@@ -1,4 +1,4 @@
-# Rockchip RK3588s 2GB-16GB GBE eMMC NVMe SATA USB3 WiFi
+# Rockchip RK3588S octa core 4GB-16GB GBE eMMC NVMe/SATA USB3 WiFi HDMI
 BOARD_NAME="Station M3"
 BOARD_VENDOR="firefly"
 BOARDFAMILY="rockchip-rk3588"
@@ -11,7 +11,6 @@ FULL_DESKTOP="yes"
 BOOT_LOGO="desktop"
 BOOT_FDT_FILE="rockchip/rk3588s-roc-pc.dtb"
 BOOT_SCENARIO="spl-blobs"
-BOOT_SOC="rk3588"
 IMAGE_PARTITION_TABLE="gpt"
 declare -g UEFI_EDK2_BOARD_ID="station-m3" # This _only_ used for uefi-edk2-rk3588 extension
 

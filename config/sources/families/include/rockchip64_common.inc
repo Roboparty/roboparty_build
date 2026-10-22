@@ -32,13 +32,13 @@ case $BRANCH in
 		;;
 
 	edge)
-		declare -g KERNEL_MAJOR_MINOR="7.2"
+		declare -g KERNEL_MAJOR_MINOR="7.3"
 		declare -g LINUXFAMILY=rockchip64
 		declare -g LINUXCONFIG='linux-rockchip64-'$BRANCH
 		;;
 
 	bleedingedge)
-		declare -g KERNEL_MAJOR_MINOR="7.3"
+		declare -g KERNEL_MAJOR_MINOR="7.4"
 		declare -g LINUXFAMILY=rockchip64
 		declare -g LINUXCONFIG='linux-rockchip64-'$BRANCH
 		;;
@@ -71,6 +71,8 @@ esac
 
 #BOOT_SOC=`expr $BOOTCONFIG : '.*\(rk[[:digit:]]\+.*\)_.*'`
 BOOT_SOC=${BOOT_SOC:=$(expr "${BOOTCONFIG}" : '.*\(rk[[:digit:]]\+.*\)_.*' || true)}
+# rk3588 is 6 characters. Longer names use the same boot path.
+[[ ${#BOOT_SOC} -gt 6 && ${BOOT_SOC::6} == rk3588 ]] && BOOT_SOC=rk3588
 
 if [[ "a${BOOT_SOC}a" == "aa" ]]; then
 	if [[ "${BOOTCONFIG}" != "" && "${BOOTCONFIG}" != " none" ]]; then # only warn if BOOTCONFIG set and not 'none'
@@ -460,7 +462,7 @@ family_tweaks() {
 
 family_tweaks_bsp() {
 
-	if [[ $BOOTCONFIG == *3328* ]] && [[ $BRANCH != legacy ]]; then
+	if [[ $BOOTCONFIG == *3328* ]]; then
 		mkdir -p "$destination"/etc/X11/xorg.conf.d
 		cat <<- EOF > "$destination"/etc/X11/xorg.conf.d/02-driver.conf
 			# set fbdev as default driver.
@@ -491,7 +493,7 @@ function post_family_config__900_late_default_serial_console_by_branch() {
 	fi
 
 	case $BRANCH in
-		legacy | vendor)
+		vendor*)
 			display_alert "rockchip64_common: defaulting SERIALCON" "Setting SERIALCON to ttyFIQ0 for BRANCH='${BRANCH}'" "info"
 			SERIALCON="ttyFIQ0"
 			;;
