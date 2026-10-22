@@ -76,7 +76,7 @@ function run_memoized() {
 		display_alert "Lock obtained" "${disk_cache_file}.lock" "debug"
 	fi
 
-	if [[ -f "${disk_cache_file}" ]]; then
+	if [[ -f "${disk_cache_file}" && "${ARTIFACT_IGNORE_CACHE:-no}" != "yes" ]]; then
 		declare disk_cache_file_mtime_seconds
 		disk_cache_file_mtime_seconds="$(stat -c %Y "${disk_cache_file}")"
 		declare cache_is_stale="no"

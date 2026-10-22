@@ -18,6 +18,7 @@ common_args=(
 	# Armbian excludes /home/* when assembling the image; keep the
 	# customize-image-created user home (e.g. /home/robo) instead.
 	INCLUDE_HOME_DIR=yes
+	INSTALL_ETHERCAT=yes
 )
 
 usage() {

@@ -34,7 +34,7 @@ function standard_artifact_reversion_for_deployment() {
 		# since the full versioned path includes the original hash, if the file already exists, we can trust
 		# it's the correct one, and skip reversioning.
 		# do touch the file, so mtime reflects it is wanted, and later delete old files to keep junk under control
-		if [[ -f "${deb_versioned_full_path}" ]]; then
+		if [[ -f "${deb_versioned_full_path}" && "${ARTIFACT_IGNORE_CACHE}" != "yes" ]]; then
 			display_alert "Skipping reversioning" "deb: ${deb_versioned_full_path} already exists" "debug"
 			run_host_command_logged touch "${deb_versioned_full_path}"
 			continue

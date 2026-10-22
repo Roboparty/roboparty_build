@@ -1,0 +1,2 @@
+# The vendor archive is kept here; the extracted AIC8800 tree is generated into
+# cache/sources/ugreen-aic8800 by unpack.sh and must not live in the source tree.

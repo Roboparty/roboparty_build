@@ -243,11 +243,27 @@ function memoized_git_ref_to_info() {
 		}
 
 		function obtain_makefile_body_from_url() {
-			makefile_body="$(curl -sL --fail "${1}")" || {
-				display_alert "Failed to fetch Makefile from URL" "${1}" "warn"
+			local _url="${1}"
+			makefile_body="$(curl -sL --fail "${_url}")" || {
+				# gitlab.com's /-/raw/ browser path can be served a Cloudflare
+				# challenge (HTTP 403 "Just a moment..."), while git-over-https
+				# and the REST API are not. Fall back to the API for the blob.
+				if [[ "${_url}" == "https://gitlab.com/"*"/-/raw/"*"/Makefile" ]]; then
+					local _gitlab_path _ref _api_url
+					_gitlab_path="${_url#https://gitlab.com/}"
+					_gitlab_path="${_gitlab_path%%/-/raw/*}"
+					_ref="${_url##*/-/raw/}"
+					_ref="${_ref%%/*}"
+					_api_url="https://gitlab.com/api/v4/projects/${_gitlab_path//\//%2F}/repository/files/Makefile/raw?ref=${_ref}"
+					if makefile_body="$(curl -sL --fail "${_api_url}")"; then
+						display_alert "Fetched Makefile via GitLab API" "${_api_url}" "debug"
+						return 0
+					fi
+				fi
+				display_alert "Failed to fetch Makefile from URL" "${_url}" "warn"
 				return 1
 			}
-			display_alert "Fetched Makefile from URL" "${1}" "debug"
+			display_alert "Fetched Makefile from URL" "${_url}" "debug"
 			return 0
 		}
 

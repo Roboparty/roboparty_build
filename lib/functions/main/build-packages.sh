@@ -44,6 +44,11 @@ function determine_artifacts_to_build_for_image() {
 	# Userspace, BOARD+BRANCH specific (not RELEASE)
 	artifacts_to_build+=("armbian-bsp-cli")
 
+	# Optional source-built artifacts (same style as PLYMOUTH / armbian-zsh).
+	if [[ "${INSTALL_ETHERCAT:-no}" == "yes" ]]; then
+		artifacts_to_build+=("ethercat")
+	fi
+
 	# Desktop packages are now installed by armbian-config (module_desktops)
 	# during rootfs creation in distro-agnostic.sh. No per-DE artifact to build.
 

@@ -406,6 +406,11 @@ function install_distribution_agnostic() {
 	# install board support packages
 	install_artifact_deb_chroot "armbian-bsp-cli"
 
+	# Install optional source-built artifacts (same style as PLYMOUTH / armbian-zsh).
+	if [[ "${INSTALL_ETHERCAT:-no}" == "yes" ]]; then
+		install_artifact_deb_chroot "ethercat"
+	fi
+
 	# install armbian-zsh
 	if [[ "${PACKAGE_LIST_RM}" != *armbian-zsh* ]]; then
 		if [[ $BUILD_MINIMAL != yes ]]; then

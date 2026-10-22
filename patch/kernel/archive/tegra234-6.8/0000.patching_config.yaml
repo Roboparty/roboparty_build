@@ -1,0 +1,10 @@
+config:
+  name: tegra234-6.8
+  kind: kernel
+  type: vendor
+  branch: linux-noble
+  maintainers:
+    - { github: wentywenty, name: wentywenty }
+  patches-to-git:
+    do-not-commit-files:
+      - "MAINTAINERS"

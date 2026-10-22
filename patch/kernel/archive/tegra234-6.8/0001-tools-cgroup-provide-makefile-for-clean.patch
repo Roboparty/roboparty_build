@@ -1,0 +1,31 @@
+From: Armbian Build Framework <build@armbian.com>
+Subject: [PATCH] tools: cgroup: provide a Makefile for the tools clean target
+
+The NVIDIA/Ubuntu 6.8 tree ships tools/cgroup with only Python scripts, but
+tools/Makefile's "clean" aggregate descends into tools/cgroup and requires a
+"clean" target. Packaging linux-headers therefore fails with:
+
+    make[1]: *** No rule to make target 'clean'.  Stop.
+    make: *** [Makefile:173: cgroup_clean] Error 2
+
+Add a minimal Makefile providing the expected clean target.
+
+Signed-off-by: Armbian Build Framework <build@armbian.com>
+---
+ tools/cgroup/Makefile | 5 +++++
+ 1 file changed, 5 insertions(+)
+ create mode 100644 tools/cgroup/Makefile
+
+diff --git a/tools/cgroup/Makefile b/tools/cgroup/Makefile
+new file mode 100644
+index 0000000000..1234567890
+--- /dev/null
++++ b/tools/cgroup/Makefile
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: GPL-2.0
++# tools/cgroup ships only Python scripts; provide the target the top-level
++# tools/Makefile expects when descending into this directory for `clean`.
++clean:
++	@:
+-- 
+2.43.0

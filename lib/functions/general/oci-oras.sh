@@ -97,6 +97,9 @@ function run_tool_oras() {
 		"no_proxy=${no_proxy:-${NO_PROXY:-}}"
 		"NO_PROXY=${NO_PROXY:-${no_proxy:-}}"
 		"APT_PROXY_ADDR=${APT_PROXY_ADDR:-}"
+		# This network path breaks Go's HTTP/2 client with transient
+		# "stream error: PROTOCOL_ERROR"; force HTTP/1.1 for oras pulls.
+		"GODEBUG=http2client=0"
 	)
 	display_alert "Running ORAS ${ACTUAL_VERSION}" "HOME='${ORAS_HOME}'; retries='${retries:-1}'; cmdline: $*" "debug"
 	if [[ "${retries:-1}" -gt 1 ]]; then

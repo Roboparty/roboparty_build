@@ -3,9 +3,13 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# packages/blobs/ugreen -> repo root (bsp/roboparty_build)
+readonly REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 readonly ARCHIVE="${SCRIPT_DIR}/UGREEN_AIC-AX300_LinuxDriver_V1.6.zip"
 readonly ARCHIVE_SOURCE_DIR="aic8800_linux_drvier"
-readonly OUTPUT_DIR="${SCRIPT_DIR}/aic8800"
+# Extract into the build cache, never into the source tree.
+readonly OUTPUT_DIR="${REPO_ROOT}/cache/sources/ugreen-aic8800"
+readonly CACHE_ROOT="${REPO_ROOT}/cache/sources"
 
 if ! command -v unzip >/dev/null 2>&1; then
 	echo "error: unzip is required" >&2
@@ -17,7 +21,8 @@ if [[ ! -f "${ARCHIVE}" ]]; then
 	exit 1
 fi
 
-work_dir="$(mktemp -d "${SCRIPT_DIR}/.unpack-aic8800.XXXXXX")"
+mkdir -p "${CACHE_ROOT}"
+work_dir="$(mktemp -d "${CACHE_ROOT}/.unpack-aic8800.XXXXXX")"
 trap 'rm -rf -- "${work_dir}"' EXIT
 
 echo "Extracting $(basename -- "${ARCHIVE}")..."

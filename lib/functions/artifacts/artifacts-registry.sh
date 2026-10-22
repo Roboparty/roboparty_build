@@ -24,6 +24,9 @@ function armbian_register_artifacts() {
 		["armbian-base-files"]="armbian-base-files"
 		["armbian-bsp-cli"]="armbian-bsp-cli"
 
+		# source-built packages (gated by BUILD_* switches)
+		["ethercat"]="ethercat"
+
 		# tar.zst
 		["rootfs"]="rootfs"
 	)

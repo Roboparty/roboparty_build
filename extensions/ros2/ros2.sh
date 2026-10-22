@@ -15,6 +15,7 @@ function ros2_get_packages() {
 	echo \
 		"ros-${ros_distro}-desktop" \
 		"ros-${ros_distro}-realsense2-camera" \
+		"ros-${ros_distro}-rmw-zenoh-cpp" \
 		ros-dev-tools \
 		python3-colcon-common-extensions \
 		ccache \
@@ -41,11 +42,13 @@ function ros2_get_packages() {
 		python3-crcmod \
 		python3-hid \
 		gpiod \
-		adb \
 		vim \
 		dos2unix \
 		tshark \
-		zip
+		zip \
+		rt-tests \
+		python3-protobuf \
+		irqbalance
 }
 
 function extension_prepare_config__100_ros2_rootfs_packages() {

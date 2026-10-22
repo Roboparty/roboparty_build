@@ -2,7 +2,7 @@
 
 # Include the RoboPi2 WS2812 driver in the kernel artifact cache key.
 function artifact_kernel_version_parts__robopi2_ws2812() {
-	local driver_source="${SRC}/packages/bsp/roboparty/robopi-ws2812.c"
+	local driver_source="${SRC}/packages/bsp/robopi2/robopi-ws2812.c"
 	local driver_hash
 
 	[[ -f "${driver_source}" ]] || exit_with_error "${BOARD}" "Missing ${driver_source}"
@@ -13,7 +13,7 @@ function artifact_kernel_version_parts__robopi2_ws2812() {
 
 # Build the out-of-tree driver with the same tree and toolchain as the target kernel.
 function pre_package_kernel_image__robopi2_ws2812() {
-	local driver_source="${SRC}/packages/bsp/roboparty/robopi-ws2812.c"
+	local driver_source="${SRC}/packages/bsp/robopi2/robopi-ws2812.c"
 	local module_build_dir="${WORKDIR}/robopi-ws2812-${kernel_version_family}"
 	local module_install_dir="${tmp_kernel_install_dirs[INSTALL_MOD_PATH]}/lib/modules/${kernel_version_family}/extra"
 

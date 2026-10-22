@@ -1,0 +1,10 @@
+config:
+  name: hobot-x3-4.14
+  kind: kernel
+  type: vendor
+  branch: kernel
+  maintainers:
+    - { github: wentywenty, name: wentywenty }
+  patches-to-git:
+    do-not-commit-files:
+      - "MAINTAINERS"

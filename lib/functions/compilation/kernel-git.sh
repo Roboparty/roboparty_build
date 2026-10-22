@@ -16,11 +16,16 @@ function kernel_prepare_git() {
 	fi
 
 	display_alert "Downloading sources" "kernel" "git"
+	# Build the same commit used to calculate the artifact version, even if the branch moves.
+	local kernel_fetch_ref="${KERNELBRANCH}"
+	if [[ "${KERNEL_GIT_SHA1:-}" =~ ^[0-9a-f]{40}$ ]]; then
+		kernel_fetch_ref="commit:${KERNEL_GIT_SHA1}"
+	fi
 
 	GIT_FIXED_WORKDIR="${LINUXSOURCEDIR}" \
 		GIT_BARE_REPO_FOR_WORKTREE="${kernel_git_bare_tree}" \
 		GIT_BARE_REPO_INITIAL_BRANCH="master" \
-		fetch_from_repo "${KERNELSOURCE}" "kernel:${KERNEL_MAJOR_MINOR}" "${KERNELBRANCH}" "yes"
+		fetch_from_repo "${KERNELSOURCE}" "kernel:${KERNEL_MAJOR_MINOR}" "${kernel_fetch_ref}" "yes"
 	# second parameter, "dir", is ignored, since we've passed GIT_FIXED_WORKDIR
 }
 

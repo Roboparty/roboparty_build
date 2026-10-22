@@ -1,7 +1,7 @@
 # @description Builds the UGREEN AX300 AIC8800 USB Wi-Fi/Bluetooth driver and installs its firmware.
 
 function extension_prepare_config__ugreen_aic8800() {
-	local unpack_script="${SRC}/packages/bsp/ugreen/unpack.sh"
+	local unpack_script="${SRC}/packages/blobs/ugreen/unpack-aic8800.sh"
 
 	[[ -x "${unpack_script}" ]] || exit_with_error "UGREEN AIC8800" "Missing ${unpack_script}"
 	display_alert "UGREEN AIC8800" "Extracting vendor driver sources" "info"
@@ -10,9 +10,9 @@ function extension_prepare_config__ugreen_aic8800() {
 }
 
 function artifact_kernel_version_parts__ugreen_aic8800() {
-	local vendor_archive="${SRC}/packages/bsp/ugreen/UGREEN_AIC-AX300_LinuxDriver_V1.6.zip"
-	local compat_patch="${SRC}/packages/bsp/ugreen/aic8800-linux-6.18-compat.patch"
-	local unpack_script="${SRC}/packages/bsp/ugreen/unpack.sh"
+	local vendor_archive="${SRC}/packages/blobs/ugreen/UGREEN_AIC-AX300_LinuxDriver_V1.6.zip"
+	local compat_patch="${SRC}/packages/blobs/ugreen/aic8800-linux-6.18-compat.patch"
+	local unpack_script="${SRC}/packages/blobs/ugreen/unpack-aic8800.sh"
 	local hash_files="undetermined"
 
 	[[ -f "${vendor_archive}" ]] || exit_with_error "UGREEN AIC8800" "Missing ${vendor_archive}"
@@ -25,8 +25,8 @@ function artifact_kernel_version_parts__ugreen_aic8800() {
 }
 
 function pre_package_kernel_image__ugreen_aic8800() {
-	local source_root="${SRC}/packages/bsp/ugreen/aic8800"
-	local compat_patch="${SRC}/packages/bsp/ugreen/aic8800-linux-6.18-compat.patch"
+	local source_root="${SRC}/cache/sources/ugreen-aic8800"
+	local compat_patch="${SRC}/packages/blobs/ugreen/aic8800-linux-6.18-compat.patch"
 	local module_build_dir="${WORKDIR}/ugreen-aic8800-${kernel_version_family}"
 	local module_source_dir="${module_build_dir}/drivers/aic8800"
 	local module_install_dir="${tmp_kernel_install_dirs[INSTALL_MOD_PATH]}/lib/modules/${kernel_version_family}/extra/ugreen-aic8800"
@@ -51,8 +51,8 @@ function pre_package_kernel_image__ugreen_aic8800() {
 }
 
 function post_family_tweaks__ugreen_aic8800_files() {
-	local source_root="${SRC}/packages/bsp/ugreen/aic8800"
-	local udev_rules="${SRC}/packages/bsp/ugreen/aic.rules"
+	local source_root="${SRC}/cache/sources/ugreen-aic8800"
+	local udev_rules="${SRC}/packages/blobs/ugreen/aic.rules"
 
 	[[ -f "${udev_rules}" ]] || exit_with_error "UGREEN AIC8800" "Missing ${udev_rules}"
 	display_alert "UGREEN AIC8800" "Installing firmware and udev configuration" "info"
