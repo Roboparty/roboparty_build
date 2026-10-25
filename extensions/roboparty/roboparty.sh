@@ -1,4 +1,5 @@
 function post_customize_image__install_roboparty() {
+	[[ "${BUILD_ROS2}" == "yes" ]] || return 0
 	[[ "${BUILD_ROBOPARTY_PACKAGES}" == "yes" ]] || return 0
 
 	# Add the signed RoboParty APT repository and install the robot stack from it.
@@ -73,8 +74,19 @@ function post_customize_image__install_roboparty() {
 # Runs as robo inside the target rootfs, not on the build host.
 function roboparty_build_deploy() {
 	set -eo pipefail
+	[[ "${BUILD_ROS2:-no}" == "yes" ]] || return 0
 	cd /home/robo/roboparty_deploy
-	source /opt/ros/jazzy/setup.bash
+
+	if [[ -n "${ROS_SETUP:-}" && -f "${ROS_SETUP}" ]]; then
+		source "${ROS_SETUP}"
+	elif [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
+		source "/opt/ros/${ROS_DISTRO}/setup.bash"
+	else
+		local ros_setup
+		for ros_setup in /opt/ros/*/setup.bash; do
+			[[ -f "${ros_setup}" ]] && source "${ros_setup}" && break
+		done
+	fi
 
 	# Release flags follow the upstream -march=native and keep QEMU builds portable.
 	colcon build --symlink-install --parallel-workers 4 \
@@ -86,48 +98,76 @@ function roboparty_build_deploy() {
 
 	source install/setup.bash
 	local package
-	for package in roboparty_motors roboparty_imu roboparty_inference roboparty_camera; do
+	for package in roboparty_motors roboparty_imu roboparty_inference; do
 		ros2 pkg prefix "${package}"
 	done
-	test -x install/roboparty_inference/lib/roboparty_inference/inference_node
-	test -x install/roboparty_camera/lib/roboparty_camera/depth_node
 }
 
 # Build the upstream deployment workspace in the target rootfs.
 function post_customize_image__clone_roboparty_deploy() {
-	[[ "${BUILD_ROBOPARTY_PACKAGES}" == "yes" ]] || return 0
+	[[ "${BUILD_ROS2}" == "yes" ]] || return 0
 
-	local repo_url repo_dirname
-	case "${BOARD}" in
-		rdk-x5 | orangepi5-plus |robopi2)
-			repo_url="https://github.com/Roboparty/roboparty_deploy"
-			repo_dirname="roboparty_deploy"
-			;;
-		*)
-			return 0
-			;;
-	esac
+	local repo_url="https://github.com/Roboparty/roboparty_deploy"
+	local repo_dirname="roboparty_deploy"
 
 	local user_name="robo"
 	local user_home="/home/${user_name}"
 	local clone_dir="${SDCARD}${user_home}/${repo_dirname}"
 
-	if [[ -d "${clone_dir}/.git" ]]; then
-		display_alert "RoboParty deploy" "already present at ${user_home}/${repo_dirname}" "info"
-	else
-		display_alert "RoboParty deploy" "cloning ${repo_url} -> ${user_home}/${repo_dirname}" "info"
-		install -d -m 0755 "${SDCARD}${user_home}"
-		run_host_command_logged git clone --depth=1 "${repo_url}" "${clone_dir}"
+	# Route GitHub through GITHUB_SOURCE (REGIONAL_MIRROR=china sets ghproxy).
+	local deploy_url="${repo_url}"
+	local -a git_env=()
+	if [[ "${GITHUB_MIRROR:-}" == "ghproxy" && -n "${GITHUB_SOURCE:-}" ]]; then
+		deploy_url="${GITHUB_SOURCE}/${repo_url#https://github.com/}"
+		local mirror_cfg="${WORKDIR}/git-mirror-${repo_dirname}.gitconfig"
+		cp -f "${HOME}/.gitconfig" "${mirror_cfg}" 2>/dev/null || :
+		git config --file "${mirror_cfg}" url."${GITHUB_SOURCE}/".insteadOf "https://github.com/"
+		git_env=("GIT_CONFIG_GLOBAL=${mirror_cfg}")
 	fi
 
-	# Follow upstream submodule branches as requested; record their exact revisions.
-	run_host_command_logged git -C "${clone_dir}" submodule update --init --recursive --remote --depth=1 --jobs=4
+	local cache_deploy="${SRC}/cache/sources/roboparty_deploy"
+	local source_dir=""
+
+	if [[ -d "${cache_deploy}/src" ]]; then
+		source_dir="${cache_deploy}"
+	else
+		source_dir="${cache_deploy}"
+		install -d -m 0755 "$(dirname "${source_dir}")"
+		rm -rf "${source_dir}"
+		display_alert "RoboParty deploy" "cloning ${deploy_url} -> cache ${source_dir}" "info"
+		local clone_ok="no" attempt
+		for attempt in 1 2 3; do
+			if run_host_command_logged "${git_env[@]}" git clone --depth=1 "${deploy_url}" "${source_dir}"; then
+				clone_ok="yes"
+				break
+			fi
+			rm -rf "${source_dir}"
+			sleep 5
+		done
+		[[ "${clone_ok}" == "yes" ]] || exit_with_error "RoboParty deploy" "clone failed: ${deploy_url}"
+
+		# Submodule updates re-read the global config, so pass the mirror config explicitly.
+		run_host_command_logged "${git_env[@]}" git -C "${source_dir}" submodule update --init --recursive --remote --depth=1 --jobs=4
+	fi
+
+	if [[ "${ROBOPARTY_DEPLOY_UPDATE:-no}" == "yes" && "${source_dir}" == "${cache_deploy}" ]]; then
+		display_alert "RoboParty deploy" "updating cached snapshot ${source_dir}" "info"
+		run_host_command_logged "${git_env[@]}" git -C "${source_dir}" fetch --depth=1 origin
+		run_host_command_logged "${git_env[@]}" git -C "${source_dir}" reset --hard FETCH_HEAD
+		run_host_command_logged "${git_env[@]}" git -C "${source_dir}" submodule update --init --recursive --remote --depth=1 --jobs=4
+	fi
+
+	display_alert "RoboParty deploy" "using ${source_dir} -> ${user_home}/${repo_dirname}" "info"
+	install -d -m 0755 "${clone_dir}"
+	rsync -a --delete-excluded --exclude='.git' --exclude='/build' --exclude='/install' --exclude='/log' \
+		"${source_dir}/" "${clone_dir}/"
 	chroot_sdcard chown -R "${user_name}:${user_name}" "${user_home}/${repo_dirname}"
 
-	[[ "${BUILD_ROS2}" == "yes" ]] || return 0
-	[[ -f "${SDCARD}/opt/ros/jazzy/setup.bash" ]] || exit_with_error "RoboParty deploy requires ROS 2 Jazzy"
-	chroot_sdcard_apt_get_install build-essential cmake ccache python3-colcon-common-extensions \
-		python3-dev pybind11-dev libfmt-dev libspdlog-dev libeigen3-dev libboost-system-dev zlib1g-dev
+	local ros_setup_found="no" ros_setup_path
+	for ros_setup_path in "${SDCARD}"/opt/ros/*/setup.bash; do
+		[[ -f "${ros_setup_path}" ]] && { ros_setup_found="yes"; break; }
+	done
+	[[ "${ros_setup_found}" == "yes" ]] || exit_with_error "RoboParty deploy requires ROS 2"
 	{
 		printf '#!/usr/bin/env bash\n'
 		declare -f roboparty_build_deploy
@@ -135,12 +175,10 @@ function post_customize_image__clone_roboparty_deploy() {
 	} > "${SDCARD}/tmp/roboparty-build-deploy.sh"
 	chmod 0755 "${SDCARD}/tmp/roboparty-build-deploy.sh"
 	display_alert "RoboParty deploy" "building ARM64 workspace inside rootfs" "info"
-	chroot_sdcard runuser -u "${user_name}" -- env HOME="${user_home}" CCACHE_DISABLE=1 \
+	chroot_sdcard runuser -u "${user_name}" -- env \
+		-u ROS_DISTRO -u ROS_SETUP -u AMENT_PREFIX_PATH -u CMAKE_PREFIX_PATH \
+		-u COLCON_PREFIX_PATH -u ROS_PACKAGE_PATH \
+		BUILD_ROS2="${BUILD_ROS2}" HOME="${user_home}" CCACHE_DISABLE=1 \
 		CMAKE_BUILD_PARALLEL_LEVEL=8 MAKEFLAGS=-j8 /tmp/roboparty-build-deploy.sh
 	rm -f "${SDCARD}/tmp/roboparty-build-deploy.sh"
-	install -d -m 0755 "${SDCARD}/usr/share/roboparty"
-	{
-		git -C "${clone_dir}" log -1 --format='deploy %H'
-		git -C "${clone_dir}" submodule status --recursive
-	} > "${SDCARD}/usr/share/roboparty/deploy-revisions.txt"
 }

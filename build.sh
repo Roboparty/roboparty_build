@@ -12,6 +12,7 @@ cd "${SCRIPT_DIR}"
 # the git/apt/mainline mirrors.
 common_args=(
 	CUSTOM_UBUNTU_MIRROR_PORTS=repo.huaweicloud.com/ubuntu-ports/
+	REGIONAL_MIRROR=china
 	KERNEL_CONFIGURE=no
 	PACKAGE_LIST_RM=armbian-zsh
 	GHCR_MIRROR=nju
@@ -25,6 +26,7 @@ common_args=(
 # into the kernel image, so keep INSTALL_ETHERCAT in sync with image builds.
 kernel_args=(
 	KERNEL_CONFIGURE=no
+	REGIONAL_MIRROR=china
 	GHCR_MIRROR=nju
 	PREFER_DOCKER=no
 	INSTALL_ETHERCAT=yes
@@ -42,9 +44,9 @@ usage() {
 	  variant (default: all):
 	    robopi2            all | desktop | cli | kernel
 	    opi5plus           all | desktop | cli | kernel
-	    rdk-x5             all | vendor | vendor-rt | kernel
+	    rdk-x5             desktop | kernel
 
-	  kernel builds kernel debs only. rdk-x5 kernel uses vendor-rt.
+	  kernel builds kernel debs only. rdk-x5 uses vendor-rt for both variants.
 
 	Backwards compatible: '$0 all|desktop|cli' builds robopi2.
 	EOF
@@ -115,24 +117,23 @@ opi5plus_kernel() {
 # ---------------------------------------------------------------- RDK X5
 rdk_common=(
 	BOARD=rdk-x5
+	BRANCH=vendor-rt
 	RELEASE=noble
-	BUILD_DESKTOP=no
 	BUILD_MINIMAL=no
+	VENDOR=roboparty-os
 )
 
-rdk_vendor() {
+rdk_desktop() {
 	run_build "${rdk_common[@]}" "${common_args[@]}" \
-		BRANCH=vendor
-}
-
-rdk_vendor_rt() {
-	run_build "${rdk_common[@]}" "${common_args[@]}" \
-		BRANCH=vendor-rt
+		BUILD_DESKTOP=yes \
+		DESKTOP_ENVIRONMENT=xfce \
+		DESKTOP_TIER=minimal \
+		BUILD_ROS2=yes \
+		BUILD_ROBOPARTY_PACKAGES=yes
 }
 
 rdk_kernel() {
-	run_kernel "${rdk_common[@]}" "${kernel_args[@]}" \
-		BRANCH=vendor-rt
+	run_kernel "${rdk_common[@]}" "${kernel_args[@]}"
 }
 
 # ---------------------------------------------------------------- dispatch
@@ -183,9 +184,7 @@ case "${target}" in
 		;;
 	rdk-x5 | rdk)
 		case "${variant}" in
-			all) rdk_vendor && rdk_vendor_rt ;;
-			vendor) rdk_vendor ;;
-			vendor-rt) rdk_vendor_rt ;;
+			desktop) rdk_desktop ;;
 			kernel) rdk_kernel ;;
 			*) usage; exit 2 ;;
 		esac

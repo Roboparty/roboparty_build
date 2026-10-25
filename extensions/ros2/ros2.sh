@@ -22,6 +22,10 @@ function ros2_get_packages() {
 		libfmt-dev \
 		libspdlog-dev \
 		libeigen3-dev \
+		python3-dev \
+		pybind11-dev \
+		libboost-system-dev \
+		zlib1g-dev \
 		whiptail \
 		parted \
 		psmisc \

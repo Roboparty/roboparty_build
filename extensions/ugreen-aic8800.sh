@@ -41,7 +41,7 @@ function pre_package_kernel_image__ugreen_aic8800() {
 	cp -a "${source_root}/." "${module_build_dir}/"
 	patch --batch --forward -d "${module_build_dir}" -p2 < "${compat_patch}"
 
-	run_kernel_make "M=${module_source_dir}" modules
+	run_kernel_make -C "${kernel_work_dir}" "M=${module_source_dir}" modules
 	for module_name in aic_load_fw/aic_load_fw.ko aic8800_fdrv/aic8800_fdrv.ko; do
 		[[ -f "${module_source_dir}/${module_name}" ]] || exit_with_error "UGREEN AIC8800" "Missing ${module_name} after build"
 		install -m 0644 "${module_source_dir}/${module_name}" "${module_install_dir}/$(basename "${module_name}")"
