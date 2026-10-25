@@ -20,7 +20,7 @@ function ethercat_upstream_url() {
 
 # Pinned release (IgH tags are bare numbers, no "v" prefix).
 function ethercat_upstream_ref() {
-	echo -n "tag:1.6.13"
+	echo -n "tag:1.7-dev"
 }
 
 function add_host_dependencies__ethercat_build_tools() {
@@ -64,6 +64,11 @@ function pre_package_kernel_image__ethercat() {
 	rm -rf "${module_src}"
 	cp -a "${SRC}/cache/sources/ethercat" "${module_src}"
 	rm -rf "${module_src}/.git"
+
+	# Linux 6.18 changed kernel_bind() to take struct sockaddr_unsized.
+	if linux-version compare "${KERNEL_MAJOR_MINOR}" ge 6.18; then
+		sed -i 's/KERNEL_VERSION(6, 19, 0)/KERNEL_VERSION(6, 18, 0)/' "${module_src}/devices/generic.c"
+	fi
 
 	display_alert "ethercat" "Building kernel modules for ${kernel_version_family}" "info"
 	run_host_command_logged "cd '${module_src}' && ./bootstrap"
