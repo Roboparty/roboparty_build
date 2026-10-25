@@ -21,17 +21,30 @@ common_args=(
 	INSTALL_ETHERCAT=yes
 )
 
+# Options shared by kernel-only artifact builds. EtherCAT modules are staged
+# into the kernel image, so keep INSTALL_ETHERCAT in sync with image builds.
+kernel_args=(
+	KERNEL_CONFIGURE=no
+	GHCR_MIRROR=nju
+	PREFER_DOCKER=no
+	INSTALL_ETHERCAT=yes
+)
+
 usage() {
 	cat >&2 <<-EOF
 	Usage: $0 <target> [variant]
 
 	  target:
 	    robopi2            RK3588 RoboPi2 (noble)
-	    rdk-x5 | rdk       D-Robotics RDK X5 (jammy)
+	    opi5plus | orangepi5-plus  RK3588 Orange Pi 5 Plus (noble)
+	    rdk-x5 | rdk       D-Robotics RDK X5 (noble)
 
 	  variant (default: all):
-	    robopi2            all | desktop | cli
-	    rdk-x5             all | vendor | vendor-rt
+	    robopi2            all | desktop | cli | kernel
+	    opi5plus           all | desktop | cli | kernel
+	    rdk-x5             all | vendor | vendor-rt | kernel
+
+	  kernel builds kernel debs only. rdk-x5 kernel uses vendor-rt.
 
 	Backwards compatible: '$0 all|desktop|cli' builds robopi2.
 	EOF
@@ -39,6 +52,10 @@ usage() {
 
 run_build() {
 	./compile.sh build "$@"
+}
+
+run_kernel() {
+	./compile.sh kernel "$@"
 }
 
 # ---------------------------------------------------------------- robopi2
@@ -64,6 +81,37 @@ robopi2_cli() {
 		BUILD_DESKTOP=no
 }
 
+robopi2_kernel() {
+	run_kernel "${robopi2_common[@]}" "${kernel_args[@]}"
+}
+
+# ---------------------------------------------------------------- Orange Pi 5 Plus
+opi5plus_common=(
+	BOARD=orangepi5-plus
+	BRANCH=current
+	RELEASE=noble
+	BUILD_MINIMAL=no
+	VENDOR=roboparty-os
+)
+
+opi5plus_desktop() {
+	run_build "${opi5plus_common[@]}" "${common_args[@]}" \
+		BUILD_DESKTOP=yes \
+		DESKTOP_ENVIRONMENT=xfce \
+		DESKTOP_TIER=minimal \
+		BUILD_ROS2=yes \
+		BUILD_ROBOPARTY_PACKAGES=yes
+}
+
+opi5plus_cli() {
+	run_build "${opi5plus_common[@]}" "${common_args[@]}" \
+		BUILD_DESKTOP=no
+}
+
+opi5plus_kernel() {
+	run_kernel "${opi5plus_common[@]}" "${kernel_args[@]}"
+}
+
 # ---------------------------------------------------------------- RDK X5
 rdk_common=(
 	BOARD=rdk-x5
@@ -82,17 +130,26 @@ rdk_vendor_rt() {
 		BRANCH=vendor-rt
 }
 
+rdk_kernel() {
+	run_kernel "${rdk_common[@]}" "${kernel_args[@]}" \
+		BRANCH=vendor-rt
+}
+
 # ---------------------------------------------------------------- dispatch
 first="${1:-all}"
 second="${2:-all}"
 
 case "${first}" in
-	all | desktop | cli)
+	all | desktop | cli | kernel)
 		target="robopi2"
 		variant="${first}"
 		;;
 	robopi2 | rdk-x5 | rdk)
 		target="${first}"
+		variant="${second}"
+		;;
+	opi5plus | orangepi5-plus)
+		target="opi5plus"
 		variant="${second}"
 		;;
 	-h | --help | help)
@@ -111,6 +168,16 @@ case "${target}" in
 			all) robopi2_desktop && robopi2_cli ;;
 			desktop) robopi2_desktop ;;
 			cli) robopi2_cli ;;
+			kernel) robopi2_kernel ;;
+			*) usage; exit 2 ;;
+		esac
+		;;
+	opi5plus)
+		case "${variant}" in
+			all) opi5plus_desktop && opi5plus_cli ;;
+			desktop) opi5plus_desktop ;;
+			cli) opi5plus_cli ;;
+			kernel) opi5plus_kernel ;;
 			*) usage; exit 2 ;;
 		esac
 		;;
@@ -119,6 +186,7 @@ case "${target}" in
 			all) rdk_vendor && rdk_vendor_rt ;;
 			vendor) rdk_vendor ;;
 			vendor-rt) rdk_vendor_rt ;;
+			kernel) rdk_kernel ;;
 			*) usage; exit 2 ;;
 		esac
 		;;

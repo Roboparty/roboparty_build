@@ -1,8 +1,8 @@
-name: Build robopi2 kernel debs
+name: Build kernel debs
 
 on:
   push:
-    branches: [next]
+    branches: [main]
     tags: ['v*']
   release:
     types: [published]
@@ -10,10 +10,24 @@ on:
 
 jobs:
   build:
-    name: robopi2 / current / kernel debs
+    name: ${{ matrix.label }} / kernel debs
     runs-on: [self-hosted, a100]
+    timeout-minutes: 90
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: robopi2
+            label: robopi2-current
+          - target: opi5plus
+            label: orangepi5-plus-current
+          - target: rdk
+            label: rdk-x5-vendor-rt
+    concurrency:
+      group: build-kernel-${{ github.repository }}-${{ github.ref }}-${{ matrix.label }}
+      cancel-in-progress: false
     steps:
       - name: Fix workspace permissions
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
@@ -36,9 +50,9 @@ jobs:
           path: |
             cache
             toolchains
-          key: armbian-robopi2-${{ runner.os }}-${{ hashFiles('config/**', 'patch/**', 'extensions/**', 'lib/**') }}
+          key: armbian-kernel-${{ runner.os }}-${{ hashFiles('config/**', 'patch/**', 'extensions/**', 'lib/**', 'requirements.txt') }}
           restore-keys: |
-            armbian-robopi2-${{ runner.os }}-
+            armbian-kernel-${{ runner.os }}-
 
       - name: Clean generated directories
         run: |
@@ -50,12 +64,7 @@ jobs:
           sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache device-tree-compiler debootstrap git qemu-user-static rsync zstd
 
       - name: Build kernel debs
-        run: |
-          ./compile.sh kernel \
-            BOARD=robopi2 \
-            BRANCH=current \
-            KERNEL_CONFIGURE=no \
-            GHCR_MIRROR=nju
+        run: ./build.sh ${{ matrix.target }} kernel
 
       - name: Collect kernel + source DEBs
         run: |
@@ -65,9 +74,18 @@ jobs:
       - name: Upload kernel DEBs
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-debs-robopi2-current
+          name: kernel-debs-${{ matrix.label }}
           path: output/release-debs/
           retention-days: 7
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-logs-${{ matrix.label }}
+          path: output/logs/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload kernel DEBs to release
         if: startsWith(github.ref, 'refs/tags/v')
