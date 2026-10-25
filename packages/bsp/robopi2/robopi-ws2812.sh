@@ -25,7 +25,7 @@ function pre_package_kernel_image__robopi2_ws2812() {
 	cp -f "${driver_source}" "${module_build_dir}/robopi-ws2812.c"
 	printf '%s\n' 'obj-m := robopi-ws2812.o' > "${module_build_dir}/Makefile"
 
-	run_kernel_make "M=${module_build_dir}" modules
+	run_kernel_make -C "${kernel_work_dir}" "M=${module_build_dir}" modules
 	install -m 0644 "${module_build_dir}/robopi-ws2812.ko" "${module_install_dir}/robopi-ws2812.ko"
 	depmod -b "${tmp_kernel_install_dirs[INSTALL_MOD_PATH]}" "${kernel_version_family}"
 	rm -rf "${module_build_dir}"

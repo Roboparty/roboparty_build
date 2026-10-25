@@ -1,56 +1,55 @@
 function post_customize_image__install_roboparty() {
 	[[ "${BUILD_ROBOPARTY_PACKAGES}" == "yes" ]] || return 0
 
-	# Temporarily disabled: install the local packages below instead.
-	# local roboparty_dist=""
-	# [[ "${BOARD}" == "robopi2" ]] && roboparty_dist="${BOARD}"
-	# install -d "${SDCARD}/usr/share/keyrings" "${SDCARD}/etc/apt/sources.list.d"
-	# curl -fsSL "http://apt.roboparty.com/roboparty.gpg" | gpg --dearmor --yes -o "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
-	# chmod 644 "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
-	# cat > "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
-	# 	deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] http://apt.roboparty.com common main
-	# EOF
-	# if [[ -n "${roboparty_dist}" ]]; then
-	# 	cat >> "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
-	# 		deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] http://apt.roboparty.com ${roboparty_dist} main
-	# 	EOF
-	# fi
-	# chroot_sdcard_apt_get_update
-	# chroot_sdcard_apt_get upgrade
-	# chroot_sdcard_apt_get_install roboparty-all robopi-config
-
-	local roboparty_deb_dir="${ROBOPARTY_DEB_DIR:-${SRC}/../../hex/temp_deb}"
-	local roboparty_stage="/tmp/roboparty-debs"
-	local deb_file
-	local -a roboparty_debs=(
-		roboparty-base_1.1.8-2_all.deb
-		roboparty-bms_1.5.1-1_arm64.deb
-		robopi-addon_1.8.4-1_arm64.deb
-		robopi-analyze_1.0.10-1_all.deb
-		adbd_1.0.4-1_arm64.deb
-	)
-	local -a roboparty_install_paths=()
-	for deb_file in "${roboparty_debs[@]}"; do
-		[[ -f "${roboparty_deb_dir}/${deb_file}" ]] || exit_with_error "Missing local RoboParty package" "${roboparty_deb_dir}/${deb_file}"
-		dpkg-deb --info "${roboparty_deb_dir}/${deb_file}" > /dev/null
-	done
-
-	# Cached rootfs trees may still contain the previously configured source.
-	if [[ -f "${SDCARD}/etc/apt/sources.list.d/roboparty.list" ]]; then
-		mv "${SDCARD}/etc/apt/sources.list.d/roboparty.list" "${SDCARD}/etc/apt/sources.list.d/roboparty.list.disabled"
+	# Add the signed RoboParty APT repository and install the robot stack from it.
+	local roboparty_dist=""
+	[[ "${BOARD}" == "robopi2" ]] && roboparty_dist="${BOARD}"
+	install -d "${SDCARD}/usr/share/keyrings" "${SDCARD}/etc/apt/sources.list.d"
+	curl -fsSL "https://apt.roboparty.com/roboparty.gpg" \
+		| gpg --batch --dearmor --yes -o "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
+	chmod 644 "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
+	cat > "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
+		deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com common main
+	EOF
+	if [[ -n "${roboparty_dist}" ]]; then
+		cat >> "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
+			deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com ${roboparty_dist} main
+		EOF
 	fi
-	install -d -m 0755 "${SDCARD}${roboparty_stage}"
-	for deb_file in "${roboparty_debs[@]}"; do
-		install -m 0644 "${roboparty_deb_dir}/${deb_file}" "${SDCARD}${roboparty_stage}/${deb_file}"
-		roboparty_install_paths+=("${roboparty_stage}/${deb_file}")
-	done
-	# Resolve dependencies from the distribution sources in one apt transaction.
 	chroot_sdcard_apt_get_update
-	chroot_sdcard_apt_get_install --allow-downgrades "${roboparty_install_paths[@]}"
-	for deb_file in "${roboparty_debs[@]}"; do
-		rm -f "${SDCARD}${roboparty_stage}/${deb_file}"
-	done
-	rmdir "${SDCARD}${roboparty_stage}"
+	# chroot_sdcard_apt_get upgrade
+	# robopi-tui depends on adbd; installing it pulls in the ADB daemon.
+	chroot_sdcard_apt_get_install roboparty-all robopi-tui
+
+	# Local package installation is disabled; keep this block for offline
+	# fallback if the public repo is unavailable.
+	# local roboparty_deb_dir="${ROBOPARTY_DEB_DIR:-${SRC}/../../hex/temp_deb}"
+	# local roboparty_stage="/tmp/roboparty-debs"
+	# local deb_file
+	# local -a roboparty_debs=(
+	# 	roboparty-base_1.1.8-2_all.deb
+	# 	roboparty-bms_1.5.1-1_arm64.deb
+	# 	robopi-addon_1.8.4-1_arm64.deb
+	# 	robopi-analyze_1.0.10-1_all.deb
+	# 	adbd_1.0.6-1_arm64.deb
+	# )
+	# local -a roboparty_install_paths=()
+	# for deb_file in "${roboparty_debs[@]}"; do
+	# 	[[ -f "${roboparty_deb_dir}/${deb_file}" ]] || exit_with_error "Missing local RoboParty package" "${roboparty_deb_dir}/${deb_file}"
+	# 	dpkg-deb --info "${roboparty_deb_dir}/${deb_file}" > /dev/null
+	# done
+
+	# install -d -m 0755 "${SDCARD}${roboparty_stage}"
+	# for deb_file in "${roboparty_debs[@]}"; do
+	# 	install -m 0644 "${roboparty_deb_dir}/${deb_file}" "${SDCARD}${roboparty_stage}/${deb_file}"
+	# 	roboparty_install_paths+=("${roboparty_stage}/${deb_file}")
+	# done
+	# chroot_sdcard_apt_get_update
+	# chroot_sdcard_apt_get_install --allow-downgrades "${roboparty_install_paths[@]}"
+	# for deb_file in "${roboparty_debs[@]}"; do
+	# 	rm -f "${SDCARD}${roboparty_stage}/${deb_file}"
+	# done
+	# rmdir "${SDCARD}${roboparty_stage}"
 
 	local realtime_unit realtime_dropin_dir
 	for realtime_unit in rp-server.service bms.service; do
@@ -62,8 +61,6 @@ function post_customize_image__install_roboparty() {
 			LimitMEMLOCK=infinity
 		EOF
 	done
-	# robopi-config
-
 	# Ensure the selected target locale is generated in the customized rootfs.
 	local target_locale="${DEST_LANG:-en_US.UTF-8}"
 	if [[ -f "${SDCARD}/etc/locale.gen" ]]; then
