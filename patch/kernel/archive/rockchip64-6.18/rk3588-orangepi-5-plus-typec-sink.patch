@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RoboParty <2321901849@qq.com>
+Date: Tue, 03 Nov 2026 00:00:00 +0800
+Subject: arm64: dts: rk3588-orangepi-5-plus: prefer sink for USB-C
+
+On an independently powered board the default "source" preference makes
+the Type-C port try to source 5V into a host PC, which can trip the host
+port protection and prevent the port from ever enumerating as a device.
+Prefer "sink" so the port behaves as a USB device.
+
+---
+ arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-plus.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-plus.dts b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-plus.dts
+index 111111111111..222222222222 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-plus.dts
++++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-plus.dts
+@@ -205,7 +205,7 @@
+ 			op-sink-microwatt = <10>;
+ 			source-pdos = <PDO_FIXED(5000, 1400, PDO_FIXED_USB_COMM)>;
+ 			sink-pdos = <PDO_FIXED(5000, 10, PDO_FIXED_USB_COMM)>;
+-			try-power-role = "source";
++			try-power-role = "sink";
+ 
+ 			ports {
+ 				#address-cells = <1>;
+-- 
+Armbian

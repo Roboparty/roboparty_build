@@ -1,0 +1,507 @@
+From: RoboParty <dev@roboparty.com>
+Subject: [PATCH] can: gs_usb: opt in to HPM channel bus-off restart
+
+Provide CAN_MODE_START and bus-off notification for the roboto_usb4can
+firmware. Keep this experimental path disabled unless the module parameter
+hpm_bus_off_restart=1 is explicitly supplied. The firmware must implement
+channel-local RESET, purge pending channel traffic, retain timing settings,
+echo opaque 32-bit tokens and correctly report START failures.
+Match roboto_usb4can v1.1.0 and newer.
+
+Quiesce channel TX before publishing BUS_OFF because CAN core flushes echo
+SKBs before calling do_set_mode. Serialize TX and completion paths with the
+recovery gate. Restart only the affected channel using RESET, nominal/data
+timing and START with the original mode flags; keep shared RX URBs running.
+
+Use per-submission tokens to reject late echoes after restart or an OUT
+error. Do not recycle a successful context until both OUT completion and
+echo arrive. A token wraps only after roughly 429 million uses of its slot.
+
+Cancel recovery work before closing the channel. Failed USB control
+requests leave the channel gated; CAN core does not retry failure.
+During restart only, retry START stalls at most five times within a 100 ms
+deadline. RESET preserves an in-flight IN buffer until completion, so an
+immediate START can temporarily stall. Other errors fail immediately and
+closing prevents another attempt. Do not alter first-open or endpoint
+ownership handling.
+This does not recover USB disconnects or identify stale ordinary
+RX/error frames. Hardware bus-off fault injection is not validated.
+
+Signed-off-by: RoboParty <dev@roboparty.com>
+---
+--- a/drivers/net/can/usb/gs_usb.c
++++ b/drivers/net/can/usb/gs_usb.c
+@@ -12,8 +12,10 @@
+ 
+ #include <linux/bitfield.h>
+ #include <linux/clocksource.h>
++#include <linux/delay.h>
+ #include <linux/ethtool.h>
+ #include <linux/init.h>
++#include <linux/jiffies.h>
+ #include <linux/module.h>
+ #include <linux/netdevice.h>
+ #include <linux/signal.h>
+@@ -18,6 +20,7 @@
+ #include <linux/module.h>
+ #include <linux/netdevice.h>
+ #include <linux/signal.h>
++#include <linux/sprintf.h>
+ #include <linux/timecounter.h>
+ #include <linux/units.h>
+ #include <linux/usb.h>
+@@ -296,6 +298,11 @@
+ #define GS_MAX_RX_URBS 30
+ #define GS_NAPI_WEIGHT 32
+ 
++static bool hpm_bus_off_restart;
++module_param(hpm_bus_off_restart, bool, 0444);
++MODULE_PARM_DESC(hpm_bus_off_restart,
++		 "Experimental roboto_usb4can channel restart (requires reset-safe firmware)");
++
+ static unsigned int rx_buffer_bytes;
+ module_param(rx_buffer_bytes, uint, 0444);
+ MODULE_PARM_DESC(rx_buffer_bytes,
+@@ -317,6 +324,9 @@
+ struct gs_tx_context {
+ 	struct gs_can *dev;
+ 	unsigned int echo_id;
++	u32 wire_echo_id;
++	bool urb_pending;
++	bool echo_done;
+ };
+ 
+ struct gs_can {
+@@ -340,6 +350,13 @@
+ 
+ 	struct usb_anchor tx_submitted;
+ 	atomic_t active_tx_urbs;
++
++	/* Serialize echo access before CAN core flushes it during restart. */
++	spinlock_t io_lock;
++	struct work_struct bus_off_work;
++	bool restarting;
++	bool closing;
++	u32 mode_flags;
+ };
+ 
+ /* usb interface struct */
+@@ -375,6 +392,17 @@
+ 	for (; i < GS_MAX_TX_URBS; i++) {
+ 		if (dev->tx_context[i].echo_id == GS_MAX_TX_URBS) {
+ 			dev->tx_context[i].echo_id = i;
++			if (dev->can.do_set_mode) {
++				/* Each submission gets a new token, including after OUT errors. */
++				if (dev->tx_context[i].wire_echo_id > U32_MAX - 2 * GS_MAX_TX_URBS)
++					dev->tx_context[i].wire_echo_id = i;
++				else
++					dev->tx_context[i].wire_echo_id += GS_MAX_TX_URBS;
++			} else {
++				dev->tx_context[i].wire_echo_id = i;
++			}
++			dev->tx_context[i].urb_pending = true;
++			dev->tx_context[i].echo_done = false;
+ 			spin_unlock_irqrestore(&dev->tx_ctx_lock, flags);
+ 			return &dev->tx_context[i];
+ 		}
+@@ -391,6 +419,18 @@
+ 	txc->echo_id = GS_MAX_TX_URBS;
+ }
+ 
++/* HPM contexts remain owned until both the OUT completion and echo arrive. */
++static void gs_finish_tx_context(struct gs_tx_context *txc)
++{
++	struct gs_can *dev = txc->dev;
++
++	if (txc->urb_pending || !txc->echo_done)
++		return;
++	gs_free_tx_context(txc);
++	atomic_dec(&dev->active_tx_urbs);
++	netif_wake_queue(dev->netdev);
++}
++
+ /* Get a tx context by id.
+  */
+ static struct gs_tx_context *gs_get_tx_context(struct gs_can *dev,
+@@ -513,6 +553,33 @@
+ 	cancel_delayed_work_sync(&parent->timestamp);
+ }
+ 
++static void gs_bus_off_work(struct work_struct *work)
++{
++	struct gs_can *dev = container_of(work, struct gs_can, bus_off_work);
++	unsigned long flags;
++
++	/* Neither CAN core nor completion callbacks may race echo teardown. */
++	netif_tx_disable(dev->netdev);
++	usb_kill_anchored_urbs(&dev->tx_submitted);
++	spin_lock_irqsave(&dev->io_lock, flags);
++	if (!dev->closing) {
++		can_bus_off(dev->netdev);
++		dev->can.state = CAN_STATE_BUS_OFF;
++	}
++	spin_unlock_irqrestore(&dev->io_lock, flags);
++}
++
++static struct gs_tx_context *gs_get_echo_context(struct gs_can *dev, u32 token)
++{
++	struct gs_tx_context *txc;
++
++	txc = gs_get_tx_context(dev, token % GS_MAX_TX_URBS);
++	if (dev->can.do_set_mode &&
++	    (!txc || txc->echo_done || txc->wire_echo_id != token))
++		return NULL;
++	return txc;
++}
++
+ static void gs_update_state(struct gs_can *dev, struct can_frame *cf)
+ {
+ 	struct can_device_stats *can_stats = &dev->can.can_stats;
+@@ -521,8 +588,14 @@
+ 		dev->can.state = CAN_STATE_ERROR_ACTIVE;
+ 		can_stats->restarts++;
+ 	} else if (cf->can_id & CAN_ERR_BUSOFF) {
+-		dev->can.state = CAN_STATE_BUS_OFF;
+ 		can_stats->bus_off++;
++		if (dev->can.do_set_mode) {
++			dev->restarting = true;
++			netif_stop_queue(dev->netdev);
++			schedule_work(&dev->bus_off_work);
++		} else {
++			dev->can.state = CAN_STATE_BUS_OFF;
++		}
+ 	} else if (cf->can_id & CAN_ERR_CRTL) {
+ 		if ((cf->data[1] & CAN_ERR_CRTL_TX_WARNING) ||
+ 		    (cf->data[1] & CAN_ERR_CRTL_RX_WARNING)) {
+@@ -577,7 +650,7 @@
+ 		    const struct gs_host_frame *hf)
+ {
+ 	struct can_rx_offload *offload = &dev->offload;
+-	const u32 echo_id = hf->echo_id;
++	const u32 echo_id = hf->echo_id % GS_MAX_TX_URBS;
+ 	unsigned int len;
+ 
+ 	if (dev->feature & GS_CAN_FEATURE_HW_TIMESTAMP) {
+@@ -637,6 +710,8 @@
+ 	struct can_frame *cf;
+ 	struct canfd_frame *cfd;
+ 	struct sk_buff *skb;
++	unsigned long irq_flags = 0;
++	bool locked = false;
+ 
+ 	BUG_ON(!parent);
+ 
+@@ -681,6 +756,13 @@
+ 	if (!netif_running(netdev))
+ 		goto resubmit_urb;
+ 
++	if (dev->can.do_set_mode) {
++		spin_lock_irqsave(&dev->io_lock, irq_flags);
++		locked = true;
++		if (dev->restarting || dev->closing)
++			goto resubmit_urb;
++	}
++
+ 	minimum_length = gs_usb_get_minimum_rx_length(dev, hf, &data_length);
+ 	if (urb->actual_length < minimum_length) {
+ 		stats->rx_errors++;
+@@ -725,14 +807,18 @@
+ 
+ 		gs_usb_rx_offload(dev, skb, hf);
+ 	} else { /* echo_id == hf->echo_id */
+-		if (hf->echo_id >= GS_MAX_TX_URBS) {
++		u32 echo_id = hf->echo_id % GS_MAX_TX_URBS;
++
++		if (!dev->can.do_set_mode && hf->echo_id >= GS_MAX_TX_URBS) {
+ 			netdev_err(netdev,
+ 				   "Unexpected out of range echo id %u\n",
+ 				   hf->echo_id);
+ 			goto resubmit_urb;
+ 		}
+ 
+-		txc = gs_get_tx_context(dev, hf->echo_id);
++		txc = gs_get_echo_context(dev, hf->echo_id);
++		if (dev->can.do_set_mode && !txc)
++			goto resubmit_urb;
+ 
+ 		/* bad devices send bad echo_ids. */
+ 		if (!txc) {
+@@ -742,14 +828,17 @@
+ 			goto resubmit_urb;
+ 		}
+ 
+-		skb = dev->can.echo_skb[hf->echo_id];
++		skb = dev->can.echo_skb[echo_id];
+ 		stats->tx_packets++;
+ 		stats->tx_bytes += gs_usb_get_echo_skb(dev, skb, hf);
+-		gs_free_tx_context(txc);
+-
+-		atomic_dec(&dev->active_tx_urbs);
+-
+-		netif_wake_queue(netdev);
++		if (dev->can.do_set_mode) {
++			txc->echo_done = true;
++			gs_finish_tx_context(txc);
++		} else {
++			gs_free_tx_context(txc);
++			atomic_dec(&dev->active_tx_urbs);
++			netif_wake_queue(netdev);
++		}
+ 	}
+ 
+ 	if (hf->flags & GS_CAN_FLAG_OVERFLOW) {
+@@ -770,6 +859,8 @@
+ 	can_rx_offload_irq_finish(&dev->offload);
+ 
+ resubmit_urb:
++	if (locked)
++		spin_unlock_irqrestore(&dev->io_lock, irq_flags);
+ 	usb_fill_bulk_urb(urb, parent->udev,
+ 			  parent->pipe_in,
+ 			  hf, parent->hf_size_rx,
+@@ -841,10 +932,25 @@
+ 	struct gs_tx_context *txc = urb->context;
+ 	struct gs_can *dev = txc->dev;
+ 	struct net_device *netdev = dev->netdev;
++	struct gs_host_frame *hf = urb->transfer_buffer;
++	unsigned long flags = 0;
+ 
+-	if (!urb->status)
++	if (!urb->status && !dev->can.do_set_mode)
+ 		return;
+ 
++	if (dev->can.do_set_mode) {
++		spin_lock_irqsave(&dev->io_lock, flags);
++		if (dev->restarting || dev->closing ||
++		    txc->echo_id >= GS_MAX_TX_URBS ||
++		    txc->wire_echo_id != hf->echo_id)
++			goto unlock;
++		txc->urb_pending = false;
++		if (!urb->status) {
++			gs_finish_tx_context(txc);
++			goto unlock;
++		}
++	}
++
+ 	if (urb->status != -ESHUTDOWN && net_ratelimit())
+ 		netdev_info(netdev, "failed to xmit URB %u: %pe\n",
+ 			    txc->echo_id, ERR_PTR(urb->status));
+@@ -852,15 +958,19 @@
+ 	netdev->stats.tx_dropped++;
+ 	netdev->stats.tx_errors++;
+ 
+-	can_free_echo_skb(netdev, txc->echo_id, NULL);
++	if (!dev->can.do_set_mode || !txc->echo_done)
++		can_free_echo_skb(netdev, txc->echo_id, NULL);
+ 	gs_free_tx_context(txc);
+ 	atomic_dec(&dev->active_tx_urbs);
+ 
+ 	netif_wake_queue(netdev);
++unlock:
++	if (dev->can.do_set_mode)
++		spin_unlock_irqrestore(&dev->io_lock, flags);
+ }
+ 
+-static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
+-				     struct net_device *netdev)
++static netdev_tx_t gs_can_start_xmit_locked(struct sk_buff *skb,
++					    struct net_device *netdev)
+ {
+ 	struct gs_can *dev = netdev_priv(netdev);
+ 	struct net_device_stats *stats = &dev->netdev->stats;
+@@ -896,7 +1006,7 @@
+ 		goto badidx;
+ 	}
+ 
+-	hf->echo_id = idx;
++	hf->echo_id = txc->wire_echo_id;
+ 	hf->channel = dev->channel;
+ 	hf->flags = 0;
+ 	hf->reserved = 0;
+@@ -972,6 +1083,124 @@
+ 	return NETDEV_TX_OK;
+ }
+ 
++static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
++				     struct net_device *netdev)
++{
++	struct gs_can *dev = netdev_priv(netdev);
++	unsigned long flags;
++	netdev_tx_t rc;
++
++	if (!dev->can.do_set_mode)
++		return gs_can_start_xmit_locked(skb, netdev);
++
++	spin_lock_irqsave(&dev->io_lock, flags);
++	if (dev->restarting || dev->closing) {
++		netif_stop_queue(netdev);
++		rc = NETDEV_TX_BUSY;
++	} else {
++		rc = gs_can_start_xmit_locked(skb, netdev);
++	}
++	spin_unlock_irqrestore(&dev->io_lock, flags);
++	return rc;
++}
++
++static int gs_cmd_restart_start(struct gs_can *dev,
++				const struct gs_device_mode *dm)
++{
++	unsigned long deadline = jiffies + msecs_to_jiffies(100);
++	unsigned long now;
++	unsigned int timeout_ms;
++	int attempt, rc = -EPIPE;
++
++	/* RESET retains an in-flight IN buffer until its completion IRQ. Only
++	 * restart START may briefly stall while that ownership is released.
++	 */
++	for (attempt = 0; attempt < 5; attempt++) {
++		if (READ_ONCE(dev->closing))
++			return -ENODEV;
++		now = jiffies;
++		if (time_after_eq(now, deadline))
++			break;
++		timeout_ms = jiffies_to_msecs(deadline - now);
++		if (!timeout_ms)
++			timeout_ms = 1;
++		rc = usb_control_msg_send(dev->udev, 0, GS_USB_BREQ_MODE,
++					  USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
++					  dev->channel, 0, dm, sizeof(*dm),
++					  timeout_ms, GFP_KERNEL);
++		if (rc != -EPIPE || attempt == 4)
++			return rc;
++		if (time_after_eq(jiffies + msecs_to_jiffies(20), deadline))
++			break;
++		msleep(20);
++	}
++
++	return rc;
++}
++
++static bool gs_hpm_bus_off_restart_supported(const struct usb_device *udev)
++{
++	unsigned int major, minor, patch;
++
++	if (le16_to_cpu(udev->descriptor.idVendor) != USB_CANDLELIGHT_VENDOR_ID ||
++	    le16_to_cpu(udev->descriptor.idProduct) != USB_CANDLELIGHT_PRODUCT_ID ||
++	    !udev->product)
++		return false;
++
++	/* roboto_usb4can implements channel-local RESET since v1.1.0. */
++	return sscanf(udev->product, "roboto_usb4can v%u.%u.%u",
++		      &major, &minor, &patch) == 3 &&
++	       (major > 1 || (major == 1 && minor >= 1));
++}
++
++static int gs_can_set_mode(struct net_device *netdev, enum can_mode mode)
++{
++	struct gs_can *dev = netdev_priv(netdev);
++	struct gs_device_mode dm = {
++		.mode = cpu_to_le32(GS_CAN_MODE_START),
++		.flags = cpu_to_le32(dev->mode_flags),
++	};
++	unsigned long flags;
++	int rc, i;
++
++	if (mode != CAN_MODE_START)
++		return -EOPNOTSUPP;
++	if (READ_ONCE(dev->closing))
++		return -ENODEV;
++
++	/* bus_off_work already stopped TX; CAN core has flushed echo SKBs. */
++	rc = gs_cmd_reset(dev);
++	if (rc)
++		return rc;
++	for (i = 0; i < GS_MAX_TX_URBS; i++)
++		gs_free_tx_context(&dev->tx_context[i]);
++	atomic_set(&dev->active_tx_urbs, 0);
++
++	rc = gs_usb_set_bittiming(dev);
++	if (rc)
++		return rc;
++	if (dev->can.ctrlmode & CAN_CTRLMODE_FD) {
++		rc = gs_usb_set_data_bittiming(dev);
++		if (rc)
++			return rc;
++	}
++	rc = gs_cmd_restart_start(dev, &dm);
++	if (rc)
++		return rc;
++
++	spin_lock_irqsave(&dev->io_lock, flags);
++	if (dev->closing) {
++		rc = -ENODEV;
++	} else {
++		dev->can.state = CAN_STATE_ERROR_ACTIVE;
++		dev->restarting = false;
++		if (!(dev->can.ctrlmode & CAN_CTRLMODE_LISTENONLY))
++			netif_wake_queue(netdev);
++	}
++	spin_unlock_irqrestore(&dev->io_lock, flags);
++	return rc;
++}
++
+ static int gs_can_open(struct net_device *netdev)
+ {
+ 	struct gs_can *dev = netdev_priv(netdev);
+@@ -984,6 +1197,7 @@
+ 	u32 ctrlmode;
+ 	u32 flags = 0;
+ 	int rc, i;
++	unsigned long irq_flags;
+ 
+ 	rc = open_candev(netdev);
+ 	if (rc)
+@@ -1096,6 +1310,7 @@
+ 	/* finally start device */
+ 	dev->can.state = CAN_STATE_ERROR_ACTIVE;
+ 	dm.flags = cpu_to_le32(flags);
++	dev->mode_flags = flags;
+ 	rc = usb_control_msg_send(dev->udev, 0, GS_USB_BREQ_MODE,
+ 				  USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
+ 				  dev->channel, 0, &dm, sizeof(dm), 1000,
+@@ -1108,8 +1323,12 @@
+ 	}
+ 
+ 	parent->active_channels++;
++	spin_lock_irqsave(&dev->io_lock, irq_flags);
++	dev->closing = false;
++	dev->restarting = false;
+ 	if (!(dev->can.ctrlmode & CAN_CTRLMODE_LISTENONLY))
+ 		netif_start_queue(netdev);
++	spin_unlock_irqrestore(&dev->io_lock, irq_flags);
+ 
+ 	return 0;
+ 
+@@ -1171,6 +1390,14 @@
+ 	int rc;
+ 	struct gs_can *dev = netdev_priv(netdev);
+ 	struct gs_usb *parent = dev->parent;
++	unsigned long flags;
++
++	spin_lock_irqsave(&dev->io_lock, flags);
++	dev->closing = true;
++	dev->restarting = true;
++	spin_unlock_irqrestore(&dev->io_lock, flags);
++	cancel_work_sync(&dev->bus_off_work);
++	cancel_delayed_work_sync(&dev->can.restart_work);
+ 
+ 	netif_stop_queue(netdev);
+ 
+@@ -1384,9 +1612,17 @@
+ 	init_usb_anchor(&dev->tx_submitted);
+ 	atomic_set(&dev->active_tx_urbs, 0);
+ 	spin_lock_init(&dev->tx_ctx_lock);
++	spin_lock_init(&dev->io_lock);
++	INIT_WORK(&dev->bus_off_work, gs_bus_off_work);
++	dev->closing = true;
++	dev->restarting = true;
++	if (hpm_bus_off_restart &&
++	    gs_hpm_bus_off_restart_supported(dev->udev))
++		dev->can.do_set_mode = gs_can_set_mode;
+ 	for (rc = 0; rc < GS_MAX_TX_URBS; rc++) {
+ 		dev->tx_context[rc].dev = dev;
+ 		dev->tx_context[rc].echo_id = GS_MAX_TX_URBS;
++		dev->tx_context[rc].wire_echo_id = rc;
+ 	}
+ 
+ 	/* can setup */

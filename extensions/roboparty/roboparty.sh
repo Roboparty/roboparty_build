@@ -3,19 +3,32 @@ function post_customize_image__install_roboparty() {
 	[[ "${BUILD_ROBOPARTY_PACKAGES}" == "yes" ]] || return 0
 
 	# Add the signed RoboParty APT repository and install the robot stack from it.
+	# Map each board to its APT suite: rdk-x5 -> robopi0,
+	# orangepi5-plus -> robopi1, robopi2 -> robopi2.
 	local roboparty_dist=""
-	[[ "${BOARD}" == "robopi2" ]] && roboparty_dist="${BOARD}"
+	case "${BOARD}" in
+		rdk-x5) roboparty_dist="robopi0" ;;
+		orangepi5-plus) roboparty_dist="robopi1" ;;
+		robopi2) roboparty_dist="robopi2" ;;
+	esac
 	install -d "${SDCARD}/usr/share/keyrings" "${SDCARD}/etc/apt/sources.list.d"
 	curl -fsSL "https://apt.roboparty.com/roboparty.gpg" \
 		| gpg --batch --dearmor --yes -o "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
 	chmod 644 "${SDCARD}/usr/share/keyrings/roboparty-archive-keyring.gpg"
+	# Use the target architecture so x86 images read the same repository.
 	cat > "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
-		deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com common main
+		deb [arch=${ARCH} signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com common main
 	EOF
 	if [[ -n "${roboparty_dist}" ]]; then
-		cat >> "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
-			deb [arch=arm64 signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com ${roboparty_dist} main
-		EOF
+		# Skip the board suite until it is published; apt-get update would fail on 404.
+		if curl -fsSI --max-time 10 \
+			"https://apt.roboparty.com/dists/${roboparty_dist}/Release" >/dev/null 2>&1; then
+			cat >> "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
+				deb [arch=${ARCH} signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com ${roboparty_dist} main
+			EOF
+		else
+			display_alert "RoboParty APT" "suite ${roboparty_dist} not published; using common only" "wrn"
+		fi
 	fi
 	chroot_sdcard_apt_get_update
 	# chroot_sdcard_apt_get upgrade

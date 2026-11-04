@@ -27,9 +27,14 @@ function add_host_dependencies__ethercat_build_tools() {
 	[[ "${INSTALL_ETHERCAT:-no}" == "yes" ]] || return 0
 
 	EXTRA_BUILD_DEPS+=("build-tools::autoconf" "build-tools::automake" "build-tools::libtool" "build-tools::pkg-config")
-	if [[ "${host_arch:-$(uname -m)}" != "aarch64" ]]; then
-		EXTRA_BUILD_DEPS+=("cross-arm64::gcc-aarch64-linux-gnu" "cross-arm64::g++-aarch64-linux-gnu")
-	fi
+	case "${ARCH:-}" in
+		arm64)
+			[[ "$(uname -m)" == "aarch64" ]] || EXTRA_BUILD_DEPS+=("cross-arm64::gcc-aarch64-linux-gnu" "cross-arm64::g++-aarch64-linux-gnu")
+			;;
+		amd64)
+			[[ "$(uname -m)" == "x86_64" ]] || EXTRA_BUILD_DEPS+=("cross-amd64::gcc-x86-64-linux-gnu" "cross-amd64::g++-x86-64-linux-gnu")
+			;;
+	esac
 }
 
 # Contribute the module source revision to the kernel artifact version hash.
@@ -89,12 +94,19 @@ function compile_ethercat() {
 	upstream_url="$(ethercat_upstream_url)"
 	upstream_ref="$(ethercat_upstream_ref)"
 
-	# Target triple; builds run on x86_64 hosts, so cross-compile by default.
-	local cross_prefix="aarch64-linux-gnu"
-	local host_arg="--host=${cross_prefix}"
-	if [[ "$(uname -m)" == "aarch64" ]]; then
-		host_arg=""
-	fi
+	# Cross-compile unless the host matches ARCH.
+	local host_arg=""
+	case "${ARCH}" in
+		arm64)
+			[[ "$(uname -m)" == "aarch64" ]] || host_arg="--host=aarch64-linux-gnu"
+			;;
+		amd64)
+			[[ "$(uname -m)" == "x86_64" ]] || host_arg="--host=x86_64-linux-gnu"
+			;;
+		*)
+			exit_with_error "ethercat" "Unsupported ARCH: ${ARCH}"
+			;;
+	esac
 
 	declare cleanup_id="" tmp_dir=""
 	prepare_temp_dir_in_workdir_and_schedule_cleanup "deb-ethercat" cleanup_id tmp_dir # namerefs

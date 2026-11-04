@@ -1,0 +1,59 @@
+From: wentywenty <2321901849@qq.com>
+Date: Tue, 03 Nov 2026 13:52:42 +0800
+Subject: [PATCH] can: usb: usbcanfd: adapt to Linux 6.16 CAN FD bittiming layout
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Linux 6.16 moved the CAN FD data bittiming members into struct
+can_priv.fd (commit b803c4a4f788 "can: dev: add struct
+data_bittiming_params to group FD parameters"). Keep the vendor
+usbcanfd driver building on both layouts: use can.fd.data_bittiming*
+on 6.16+/7.x and can.data_bittiming* on 5.x/6.1/6.12.
+
+SPDX-License-Identifier: GPL-2.0-only
+Signed-off-by: wentywenty <2321901849@qq.com>
+---
+--- a/usbcanfd.c
++++ b/usbcanfd.c
+@@ -18,6 +18,13 @@
+ #define USBCANFD_DRIVER_NAME  "usbcanfd"
+ #define USBCANFD_DRIVER_VERS  "2.10"
+ #define USBCANFD_USB_MAX_RX_URBS  16
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
++#define CAN_DATA_BITTIMING_CONST(c) ((c).fd.data_bittiming_const)
++#define CAN_DATA_BITTIMING_PTR(c)   (&(c).fd.data_bittiming)
++#else
++#define CAN_DATA_BITTIMING_CONST(c) ((c).data_bittiming_const)
++#define CAN_DATA_BITTIMING_PTR(c)   (&(c).data_bittiming)
++#endif
+ static const struct usb_device_id usbcanfd_id_table[] = {
+     { USB_DEVICE(UCFD_VID, UCFD_PID) },
+     { USB_DEVICE(0x3068, 0x0009) },
+@@ -475,7 +482,7 @@
+     UCFD_CMD *cmd = &d->cmd;
+     UCFD_CAN_INIT *init = (UCFD_CAN_INIT*)cmd->dat;
+     struct can_bittiming *abt = &port->can.bittiming;
+-    struct can_bittiming *dbt = &port->can.data_bittiming;
++    struct can_bittiming *dbt = CAN_DATA_BITTIMING_PTR(port->can);
+     bool fd = !!(port->can.ctrlmode & CAN_CTRLMODE_FD);
+     _DBG_("+++");
+     mutex_lock(&d->cmd_lock);
+@@ -1061,7 +1068,7 @@
+         port->can.state = CAN_STATE_STOPPED;
+         port->can.clock.freq = d->can_clk;
+         port->can.bittiming_const = &usbcanfd_a_bittiming_const;
+-        port->can.data_bittiming_const = &usbcanfd_d_bittiming_const;
++        CAN_DATA_BITTIMING_CONST(port->can) = &usbcanfd_d_bittiming_const;
+         port->can.do_set_mode = NULL;
+         port->can.do_get_berr_counter = usbcanfd_get_berr;
+         port->can.ctrlmode_supported = CAN_CTRLMODE_FD | CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LOOPBACK;
+@@ -1125,7 +1132,7 @@
+         port->can.state = CAN_STATE_STOPPED;
+         port->can.clock.freq = d->can_clk;
+         port->can.bittiming_const = &usbcanfd_a_bittiming_const;
+-        port->can.data_bittiming_const = &usbcanfd_d_bittiming_const;
++        CAN_DATA_BITTIMING_CONST(port->can) = &usbcanfd_d_bittiming_const;
+         port->can.do_set_mode = NULL;
+         port->can.do_get_berr_counter = usbcanfd_get_berr;
+         port->can.ctrlmode_supported = CAN_CTRLMODE_FD | CAN_CTRLMODE_3_SAMPLES | CAN_CTRLMODE_LOOPBACK;

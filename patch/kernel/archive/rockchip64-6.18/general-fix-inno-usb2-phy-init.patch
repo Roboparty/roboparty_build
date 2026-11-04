@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Paolo Sabatino <paolo.sabatino@gmail.com>
+Date: Mon, 22 Aug 2022 20:51:22 +0000
+Subject: remove usb2phy extcon initialization causing kernel oops
+
+Ported to rockchip64-6.18. The initial ID-based extcon sync forces
+EXTCON_USB_HOST on Type-C ports whose OTG ID pin reads as host, which
+prevents the USB2 PHY from ever attaching as a device.
+
+---
+ drivers/phy/rockchip/phy-rockchip-inno-usb2.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/drivers/phy/rockchip/phy-rockchip-inno-usb2.c b/drivers/phy/rockchip/phy-rockchip-inno-usb2.c
+index 111111111111..222222222222 100644
+--- a/drivers/phy/rockchip/phy-rockchip-inno-usb2.c
++++ b/drivers/phy/rockchip/phy-rockchip-inno-usb2.c
+@@ -1355,11 +1355,6 @@
+ 			goto out;
+ 		}
+ 
+-		if (!of_property_present(rphy->dev->of_node, "extcon")) {
+-			/* do initial sync of usb state */
+-			id = property_enabled(rphy->grf, &rport->port_cfg->utmi_id);
+-			extcon_set_state_sync(rphy->edev, EXTCON_USB_HOST, !id);
+-		}
+ 	}
+ 
+ out:
+-- 
+Armbian

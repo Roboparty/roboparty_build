@@ -1,0 +1,2 @@
+# The vendor archive is kept here; the extracted usbcanfd tree is generated into
+# cache/sources/zlg-usbcanfd by unpack-usbcanfd.sh and must not live in the source tree.

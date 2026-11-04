@@ -1,4 +1,4 @@
-name: Build kernel debs
+name: Build kernel and userspace debs
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  kernel:
     name: ${{ matrix.label }} / kernel debs
     runs-on: [self-hosted, a100]
     timeout-minutes: 90
@@ -60,7 +60,7 @@ jobs:
       - name: Build kernel debs
         run: ./build.sh ${{ matrix.target }} kernel
 
-      - name: Collect kernel + source DEBs
+      - name: Collect kernel DEBs
         run: |
           mkdir -p output/release-debs
           find output/debs -type f -name 'linux-*.deb' -exec cp -p {} output/release-debs/ \;
@@ -81,8 +81,181 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Upload kernel DEBs to release
-        if: startsWith(github.ref, 'refs/tags/v')
+  ethercat:
+    name: ethercat userspace debs (arm64 + amd64)
+    runs-on: [self-hosted, a100]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    concurrency:
+      group: build-ethercat-${{ github.repository }}-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Fix workspace permissions
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache
+            toolchains
+          key: armbian-userspace-${{ runner.os }}-${{ hashFiles('config/**', 'patch/**', 'extensions/**', 'lib/**', 'requirements.txt') }}
+          restore-keys: |
+            armbian-userspace-${{ runner.os }}-
+
+      - name: Clean generated directories
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE/userpatches" "$GITHUB_WORKSPACE/output"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -o DPkg::Lock::Timeout=600
+          sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache git rsync zstd
+
+      - name: Build EtherCAT userspace debs
+        run: ./build.sh robopi2 ethercat
+
+      - name: Collect EtherCAT DEBs
+        run: |
+          mkdir -p output/release-debs
+          find output/debs -type f -name 'ethercat-dev_*.deb' -exec cp -p {} output/release-debs/ \;
+
+      - name: Upload EtherCAT DEBs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethercat-debs
+          path: output/release-debs/
+          retention-days: 7
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethercat-logs
+          path: output/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  bsp-cli:
+    name: ${{ matrix.label }} / bsp-cli
+    runs-on: [self-hosted, a100]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: robopi2
+            label: robopi2-current
+          - target: opi5plus
+            label: orangepi5-plus-current
+          - target: rdk
+            label: rdk-x5-vendor-rt
+    concurrency:
+      group: build-bsp-cli-${{ github.repository }}-${{ github.ref }}-${{ matrix.label }}
+      cancel-in-progress: false
+    steps:
+      - name: Fix workspace permissions
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache
+            toolchains
+          key: armbian-userspace-${{ runner.os }}-${{ hashFiles('config/**', 'patch/**', 'extensions/**', 'lib/**', 'requirements.txt') }}
+          restore-keys: |
+            armbian-userspace-${{ runner.os }}-
+
+      - name: Clean generated directories
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE/userpatches" "$GITHUB_WORKSPACE/output"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -o DPkg::Lock::Timeout=600
+          sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache git rsync zstd
+
+      - name: Build BSP CLI debs
+        run: ./build.sh ${{ matrix.target }} bsp-cli
+
+      - name: Collect BSP CLI DEBs
+        run: |
+          mkdir -p output/release-debs
+          find output/debs -type f -name 'armbian-bsp-cli-*.deb' -exec cp -p {} output/release-debs/ \;
+
+      - name: Upload BSP CLI DEBs
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsp-cli-debs-${{ matrix.label }}
+          path: output/release-debs/
+          retention-days: 7
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsp-cli-logs-${{ matrix.label }}
+          path: output/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [kernel, ethercat, bsp-cli]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check tag against VERSION
+        run: |
+          version="$(cat VERSION)"
+          suffix="${version##*-}"
+          echo "VERSION=${version}"
+          if [[ "${suffix}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            expected="v${suffix}"
+            echo "Expected tag: ${expected}, actual: ${GITHUB_REF_NAME}"
+            if [[ "${expected}" != "${GITHUB_REF_NAME}" ]]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION suffix ${expected}"
+              exit 1
+            fi
+          else
+            echo "VERSION has no semver suffix; skip tag check"
+          fi
+
+      - name: Download all DEB artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-debs
+          pattern: '*-debs*'
+          merge-multiple: true
+
+      - name: List DEBs
+        run: ls -l release-debs
+
+      - name: Publish DEBs to release
         uses: softprops/action-gh-release@v2
         with:
-          files: output/release-debs/*.deb
+          files: release-debs/*.deb
+          fail_on_unmatched_files: true
