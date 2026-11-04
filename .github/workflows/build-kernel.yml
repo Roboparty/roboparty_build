@@ -34,8 +34,8 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
-            sudo rm -rf "$GITHUB_WORKSPACE/.tmp"
+            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
       - name: Fix workspace permissions
@@ -103,8 +103,8 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
-            sudo rm -rf "$GITHUB_WORKSPACE/.tmp"
+            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
       - name: Fix workspace permissions
@@ -184,8 +184,8 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
-            sudo rm -rf "$GITHUB_WORKSPACE/.tmp"
+            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
       - name: Fix workspace permissions
