@@ -65,11 +65,11 @@ The `ethercat` variant builds arm64 with the target board and amd64 with the gen
 
 Push a tag to build and publish release assets. The tag must equal `v` plus the last segment of `VERSION`.
 
-Example: `VERSION` = `26.11.0-trunk-2.0.2`, so the tag is `v2.0.2`.
+Example: `VERSION` = `26.11.0-trunk-2.0.3`, so the tag is `v2.0.3`.
 
 ```bash
-git tag v2.0.2
-git push origin v2.0.2
+git tag v2.0.3
+git push origin v2.0.3
 ```
 
 The workflow runs `kernel`, `ethercat`, and `bsp-cli` jobs in parallel. A final `release` job publishes all debs to the GitHub Release.

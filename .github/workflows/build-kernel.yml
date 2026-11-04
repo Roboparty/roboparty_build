@@ -240,10 +240,79 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  base-files:
+    name: base-files deb
+    runs-on: [self-hosted, a100]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Clean stale build mounts
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
+            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+          fi
+
+      - name: Fix workspace permissions
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache
+            toolchains
+          key: armbian-userspace-${{ runner.os }}-${{ hashFiles('config/**', 'patch/**', 'extensions/**', 'lib/**', 'requirements.txt') }}
+          restore-keys: |
+            armbian-userspace-${{ runner.os }}-
+
+      - name: Clean generated directories
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE/userpatches" "$GITHUB_WORKSPACE/output"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -o DPkg::Lock::Timeout=600
+          sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache git rsync zstd
+
+      - name: Build base-files deb
+        run: |
+          ./compile.sh artifact \
+            BOARD=jetson-orin-nx BRANCH=l4t39 RELEASE=noble VENDOR=roboparty-os \
+            WHAT=armbian-base-files PREFER_DOCKER=no REGIONAL_MIRROR=china GHCR_MIRROR=nju
+
+      - name: Collect base-files deb
+        run: |
+          mkdir -p output/release-debs
+          find output/debs -type f -name 'base-files_*.deb' -exec cp -p {} output/release-debs/ \;
+
+      - name: Upload base-files deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: base-files-debs
+          path: output/release-debs/
+          retention-days: 7
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: base-files-logs
+          path: output/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [kernel, ethercat, bsp-cli]
+    needs: [kernel, ethercat, bsp-cli, base-files]
     runs-on: ubuntu-latest
     permissions:
       contents: write
