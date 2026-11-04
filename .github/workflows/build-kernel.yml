@@ -29,6 +29,13 @@ jobs:
       group: build-kernel-${{ github.repository }}-${{ github.ref }}-${{ matrix.label }}
       cancel-in-progress: false
     steps:
+      - name: Clean stale build mounts
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
+            sudo umount -R "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp"
+          fi
+
       - name: Fix workspace permissions
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
 
@@ -91,6 +98,13 @@ jobs:
       group: build-ethercat-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
     steps:
+      - name: Clean stale build mounts
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
+            sudo umount -R "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp"
+          fi
+
       - name: Fix workspace permissions
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
 
@@ -163,6 +177,13 @@ jobs:
       group: build-bsp-cli-${{ github.repository }}-${{ github.ref }}-${{ matrix.label }}
       cancel-in-progress: false
     steps:
+      - name: Clean stale build mounts
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
+            sudo umount -R "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            sudo rm -rf "$GITHUB_WORKSPACE/.tmp"
+          fi
+
       - name: Fix workspace permissions
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
 
