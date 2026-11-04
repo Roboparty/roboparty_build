@@ -55,17 +55,20 @@ usage() {
 	    robopi2            RK3588 RoboPi2 (noble)
 	    opi5plus | orangepi5-plus  RK3588 Orange Pi 5 Plus (noble)
 	    rdk-x5 | rdk       D-Robotics RDK X5 (noble)
+	    robopi4 | orin-nx | jetson-orin-nx  Jetson Orin NX (noble, L4T)
 
 	  variant (default: all):
 	    robopi2            all | desktop | cli | kernel | ethercat | bsp-cli | packages
 	    opi5plus           all | desktop | cli | kernel | ethercat | bsp-cli | packages
 	    rdk-x5             desktop | kernel | ethercat | bsp-cli | packages
+	    robopi4            all | desktop | cli | kernel | bsp-cli
 
 	  kernel builds kernel debs only.
 	  ethercat builds userspace ethercat-dev for arm64 and amd64.
 	  bsp-cli builds armbian-bsp-cli only.
 	  packages builds ethercat + bsp-cli, no kernel/image.
 	  rdk-x5 uses vendor-rt for all variants.
+	  robopi4 builds images, kernel debs and bsp-cli; L4T handles flashing.
 
 	Backwards compatible: '$0 all|desktop|cli' builds robopi2.
 	EOF
@@ -211,6 +214,46 @@ rdk_packages() {
 	rdk_ethercat && rdk_bsp_cli
 }
 
+# ---------------------------------------------------------------- RoboPi4 (Jetson Orin NX, L4T)
+robopi4_common=(
+	BOARD=jetson-orin-nx
+	BRANCH=l4t39
+	RELEASE=noble
+	BUILD_MINIMAL=no
+	VENDOR=roboparty-os
+)
+
+# RoboPi4 images. Flashing stays with NVIDIA L4T.
+robopi4_desktop() {
+	run_build "${robopi4_common[@]}" "${common_args[@]}" \
+		BUILD_DESKTOP=yes \
+		DESKTOP_ENVIRONMENT=xfce \
+		DESKTOP_TIER=minimal \
+		BUILD_ROS2=yes \
+		BUILD_ROBOPARTY_PACKAGES=yes \
+		INSTALL_ETHERCAT=no
+}
+
+robopi4_cli() {
+	run_build "${robopi4_common[@]}" "${common_args[@]}" \
+		BUILD_DESKTOP=no \
+		INSTALL_ETHERCAT=no
+}
+
+robopi4_all() {
+	robopi4_desktop && robopi4_cli
+}
+
+# BSP config package only (armbian-bsp-cli-jetson-orin-nx-l4t39).
+robopi4_bsp_cli() {
+	run_artifact armbian-bsp-cli "${robopi4_common[@]}" "${artifact_args[@]}"
+}
+
+# Kernel debs only. Flashing stays with NVIDIA L4T.
+robopi4_kernel() {
+	run_kernel "${robopi4_common[@]}" "${kernel_args[@]}" INSTALL_ETHERCAT=no
+}
+
 # ---------------------------------------------------------------- dispatch
 first="${1:-all}"
 second="${2:-all}"
@@ -226,6 +269,10 @@ case "${first}" in
 		;;
 	opi5plus | orangepi5-plus)
 		target="opi5plus"
+		variant="${second}"
+		;;
+	robopi4 | orin-nx | jetson-orin-nx)
+		target="robopi4"
 		variant="${second}"
 		;;
 	-h | --help | help)
@@ -270,6 +317,16 @@ case "${target}" in
 			ethercat) rdk_ethercat ;;
 			bsp-cli) rdk_bsp_cli ;;
 			packages) rdk_packages ;;
+			*) usage; exit 2 ;;
+		esac
+		;;
+	robopi4)
+		case "${variant}" in
+			all) robopi4_all ;;
+			desktop) robopi4_desktop ;;
+			cli) robopi4_cli ;;
+			kernel) robopi4_kernel ;;
+			bsp-cli) robopi4_bsp_cli ;;
 			*) usage; exit 2 ;;
 		esac
 		;;

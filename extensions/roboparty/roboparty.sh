@@ -10,6 +10,7 @@ function post_customize_image__install_roboparty() {
 		rdk-x5) roboparty_dist="robopi0" ;;
 		orangepi5-plus) roboparty_dist="robopi1" ;;
 		robopi2) roboparty_dist="robopi2" ;;
+		jetson-orin-nx) roboparty_dist="robopi4" ;;
 	esac
 	install -d "${SDCARD}/usr/share/keyrings" "${SDCARD}/etc/apt/sources.list.d"
 	curl -fsSL "https://apt.roboparty.com/roboparty.gpg" \

@@ -36,14 +36,17 @@ Targets:
 - `robopi2`: RK3588 RoboPi2.
 - `opi5plus` (`orangepi5-plus`): RK3588 Orange Pi 5 Plus.
 - `rdk-x5` (`rdk`): D-Robotics RDK X5.
+- `robopi4` (`orin-nx`, `jetson-orin-nx`): Jetson Orin NX (L4T).
 
 Variants:
 
 - `all` | `desktop` | `cli`: build the image.
-- `kernel`: build kernel debs. EtherCAT modules are included (`INSTALL_ETHERCAT=yes`).
+- `kernel`: build kernel debs. EtherCAT modules are included for robopi2/opi5plus/rdk (`INSTALL_ETHERCAT=yes`).
 - `ethercat`: build userspace `ethercat-dev` for arm64 and amd64. No kernel build.
 - `bsp-cli`: build `armbian-bsp-cli` only. No kernel build.
 - `packages`: build `ethercat` and `bsp-cli`. No kernel build.
+
+`robopi4` builds images, kernel debs and `armbian-bsp-cli`. Flashing stays with NVIDIA L4T. EtherCAT modules are not installed for `robopi4`.
 
 Examples:
 
@@ -51,6 +54,8 @@ Examples:
 ./build.sh robopi2 kernel
 ./build.sh opi5plus ethercat
 ./build.sh rdk-x5 packages
+./build.sh robopi4 cli
+./build.sh robopi4 kernel
 ```
 
 `rdk-x5` uses `vendor-rt` for all variants. A bare variant builds `robopi2`, for example `./build.sh kernel`.

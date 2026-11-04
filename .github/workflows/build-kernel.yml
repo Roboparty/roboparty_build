@@ -25,6 +25,8 @@ jobs:
             label: orangepi5-plus-current
           - target: rdk
             label: rdk-x5-vendor-rt
+          - target: robopi4
+            label: jetson-orin-nx-l4t39
     concurrency:
       group: build-kernel-${{ github.repository }}-${{ github.ref }}-${{ matrix.label }}
       cancel-in-progress: false
@@ -173,6 +175,8 @@ jobs:
             label: orangepi5-plus-current
           - target: rdk
             label: rdk-x5-vendor-rt
+          - target: robopi4
+            label: jetson-orin-nx-l4t39
     concurrency:
       group: build-bsp-cli-${{ github.repository }}-${{ github.ref }}-${{ matrix.label }}
       cancel-in-progress: false
