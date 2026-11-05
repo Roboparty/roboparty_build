@@ -352,6 +352,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [kernel, ethercat, bsp-cli, base-files]
     runs-on: ubuntu-latest
+    env:
+      GIT_CONFIG_COUNT: "0"
     permissions:
       contents: write
     steps:
