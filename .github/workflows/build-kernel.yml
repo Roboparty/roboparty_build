@@ -8,6 +8,12 @@ on:
     types: [published]
   workflow_dispatch:
 
+env:
+  # The A100 runner can reach GitHub over SSH but not reliably over HTTPS.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: "url.git@github.com:.insteadOf"
+  GIT_CONFIG_VALUE_0: "https://github.com/"
+
 jobs:
   kernel:
     name: ${{ matrix.label }} / kernel debs
