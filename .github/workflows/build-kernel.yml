@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: true
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Restore build cache
         uses: actions/cache@v4
@@ -128,7 +128,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: true
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Restore build cache
         uses: actions/cache@v4
@@ -213,7 +213,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: true
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Restore build cache
         uses: actions/cache@v4
@@ -283,7 +283,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: true
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Restore build cache
         uses: actions/cache@v4
