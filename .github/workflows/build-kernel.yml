@@ -34,7 +34,11 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            mount | awk -v p="$GITHUB_WORKSPACE/.tmp" 'index($3, p) == 1 {print $3}' \
+              | sort -r | while IFS= read -r target; do
+                  sudo umount -l "$target" 2>/dev/null \
+                    || sudo umount -f "$target" 2>/dev/null || true
+                done
             sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
@@ -103,7 +107,11 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            mount | awk -v p="$GITHUB_WORKSPACE/.tmp" 'index($3, p) == 1 {print $3}' \
+              | sort -r | while IFS= read -r target; do
+                  sudo umount -l "$target" 2>/dev/null \
+                    || sudo umount -f "$target" 2>/dev/null || true
+                done
             sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
@@ -184,7 +192,11 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            mount | awk -v p="$GITHUB_WORKSPACE/.tmp" 'index($3, p) == 1 {print $3}' \
+              | sort -r | while IFS= read -r target; do
+                  sudo umount -l "$target" 2>/dev/null \
+                    || sudo umount -f "$target" 2>/dev/null || true
+                done
             sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
@@ -250,7 +262,11 @@ jobs:
       - name: Clean stale build mounts
         run: |
           if [ -d "$GITHUB_WORKSPACE/.tmp" ]; then
-            sudo umount -R -l "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
+            mount | awk -v p="$GITHUB_WORKSPACE/.tmp" 'index($3, p) == 1 {print $3}' \
+              | sort -r | while IFS= read -r target; do
+                  sudo umount -l "$target" 2>/dev/null \
+                    || sudo umount -f "$target" 2>/dev/null || true
+                done
             sudo rm -rf "$GITHUB_WORKSPACE/.tmp" 2>/dev/null || true
           fi
 
