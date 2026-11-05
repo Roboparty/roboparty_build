@@ -1,0 +1,189 @@
+{
+  "version": "3.0.0",
+  "board_5": {
+    "board_id": "5",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "reset": "19:low",
+        "i2c_bus": 1,
+        "mipi_host": 0
+      },
+      {
+        "reset": "19:low",
+        "i2c_bus": 1,
+        "mipi_host": 2
+      }
+    ],
+
+    "lcd_backlight": "62:low",
+    "lcd_reset": "61:low"
+  },
+  "board_6": {
+    "board_id": "6",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "reset": "19:low",
+        "i2c_bus": 1,
+        "mipi_host": 0
+      },
+      {
+        "reset": "19:low",
+        "i2c_bus": 1,
+        "mipi_host": 2
+      }
+    ],
+
+    "lcd_backlight": "62:low",
+    "lcd_reset": "61:low"
+  },
+  "board_8": {
+    "board_id": "8",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "reset": "19:low",
+        "i2c_bus": 1,
+        "mipi_host": 0
+      },
+      {
+        "reset": "19:low",
+        "i2c_bus": 1,
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_b": {
+    "board_id": "b",
+    "camera_num": 3,
+    "cameras": [
+      {
+        "reset": "114:low",
+        "i2c_bus": 3,
+        "mipi_host": 0
+      },
+      {
+        "reset": "114:low",
+        "i2c_bus": 1,
+        "mipi_host": 1
+      },
+      {
+        "reset": "114:low",
+        "i2c_bus": 0,
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_202": {
+    "board_id": "202",
+    "camera_num": 3,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      },
+      {
+        "mipi_host": 3
+      }
+    ]
+  },
+  "board_301": {
+    "board_id": "301",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_302": {
+    "board_id": "302",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_501": {
+    "board_id": "501",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_502": {
+    "board_id": "502",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_503": {
+    "board_id": "503",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_504": {
+    "board_id": "504",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_505": {
+    "board_id": "505",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  },
+  "board_506": {
+    "board_id": "506",
+    "camera_num": 2,
+    "cameras": [
+      {
+        "mipi_host": 0
+      },
+      {
+        "mipi_host": 2
+      }
+    ]
+  }
+}
