@@ -76,6 +76,22 @@ jobs:
           sudo apt-get update -o DPkg::Lock::Timeout=600
           sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache device-tree-compiler debootstrap git qemu-user-static rsync zstd
 
+      - name: Seed local kernel bare tree
+        run: |
+          src=/home/robo/roboparty_repo/bsp/roboparty_build/cache/git-bare/kernel
+          dst="$GITHUB_WORKSPACE/cache/git-bare/kernel"
+          if [ -f "$dst/.git/armbian-bare-tree-done" ]; then
+            echo "kernel bare tree already present"
+          elif [ -d "$src" ]; then
+            sudo mkdir -p "$(dirname "$dst")"
+            sudo rsync -a --delete "$src/" "$dst/"
+            sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE/cache/git-bare"
+            rm -rf "$dst/.git/worktrees"
+            echo "seeded kernel bare tree from $src"
+          else
+            echo "::warning::local kernel bare tree not found; ORAS download may be required"
+          fi
+
       - name: Build kernel debs
         run: ./build.sh ${{ matrix.target }} kernel
 
