@@ -37,6 +37,19 @@ function post_customize_image__install_roboparty() {
 	# chroot_sdcard_apt_get upgrade
 	# robopi-tui depends on adbd; installing it pulls in the ADB daemon.
 	chroot_sdcard_apt_get_install roboparty-all robopi-tui
+	if [[ "${ARCH}" == "arm64" ]]; then
+		# MediaTek firmware package; explicitly installed on every arm64 image.
+		chroot_sdcard_apt_get_install robopi-firmware
+	fi
+	if [[ "${BOARD}" == "robopi2" ]]; then
+		if [[ "${roboparty_board_repo}" == "yes" ]]; then
+			# RK3588-only WS2812/SIG/PMIC helpers; firmware is installed above.
+			chroot_sdcard_apt_get_install robopi-addon
+		else
+			display_alert "RoboParty APT" \
+				"robopi2 suite not published; skipping robopi-addon" "wrn"
+		fi
+	fi
 	if [[ "${roboparty_board_repo}" == "yes" ]]; then
 		# RDK user-space stack from the robopi0 suite. fake-hobot-base
 		# provides hobot-boot/hobot-dtb and the OpenSSL 1.1/libgpiod3/libteec
@@ -208,4 +221,22 @@ function post_customize_image__clone_roboparty_deploy() {
 		BUILD_ROS2="${BUILD_ROS2}" HOME="${user_home}" CCACHE_DISABLE=1 \
 		CMAKE_BUILD_PARALLEL_LEVEL=8 MAKEFLAGS=-j8 /tmp/roboparty-build-deploy.sh
 	rm -f "${SDCARD}/tmp/roboparty-build-deploy.sh"
+}
+
+function post_family_tweaks_bsp__roboparty_product_template() {
+	case "${BOARD}" in
+		rdk-x5|robopi2) ;;
+		*) return 0 ;;
+	esac
+	install -d -m 0755 "${destination}/usr/share/roboparty"
+	cat > "${destination}/usr/share/roboparty/product-template.json" <<-'EOF'
+		{
+		  "schema": 1,
+		  "provisioned": false,
+		  "board": "",
+		  "product": "",
+		  "sku": "",
+		  "dof": 0
+		}
+	EOF
 }
