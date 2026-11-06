@@ -6,6 +6,7 @@ function post_customize_image__install_roboparty() {
 	# Map each board to its APT suite: rdk-x5 -> robopi0,
 	# orangepi5-plus -> robopi1, robopi2 -> robopi2.
 	local roboparty_dist=""
+	local roboparty_board_repo="no"
 	case "${BOARD}" in
 		rdk-x5) roboparty_dist="robopi0" ;;
 		orangepi5-plus) roboparty_dist="robopi1" ;;
@@ -27,6 +28,7 @@ function post_customize_image__install_roboparty() {
 			cat >> "${SDCARD}/etc/apt/sources.list.d/roboparty.list" <<- EOF
 				deb [arch=${ARCH} signed-by=/usr/share/keyrings/roboparty-archive-keyring.gpg] https://apt.roboparty.com ${roboparty_dist} main
 			EOF
+			roboparty_board_repo="yes"
 		else
 			display_alert "RoboParty APT" "suite ${roboparty_dist} not published; using common only" "wrn"
 		fi
@@ -35,6 +37,17 @@ function post_customize_image__install_roboparty() {
 	# chroot_sdcard_apt_get upgrade
 	# robopi-tui depends on adbd; installing it pulls in the ADB daemon.
 	chroot_sdcard_apt_get_install roboparty-all robopi-tui
+	if [[ "${roboparty_board_repo}" == "yes" ]]; then
+		# RDK user-space stack from the robopi0 suite. fake-hobot-base
+		# provides hobot-boot/hobot-dtb and the OpenSSL 1.1/libgpiod3/libteec
+		# compatibility libraries required by the vendor hobot-* packages.
+		chroot_sdcard_apt_get_install \
+			fake-hobot-base \
+			hobot-io hobot-multimedia hobot-multimedia-dev \
+			hobot-dnn hobot-camera hobot-spdev
+		chroot_sdcard_apt_get --no-install-recommends \
+			-o Dpkg::Options::=--force-overwrite install hobot-wifi
+	fi
 
 	# Local package installation is disabled; keep this block for offline
 	# fallback if the public repo is unavailable.
