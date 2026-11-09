@@ -70,8 +70,9 @@ function pre_package_kernel_image__ethercat() {
 	cp -a "${SRC}/cache/sources/ethercat" "${module_src}"
 	rm -rf "${module_src}/.git"
 
-	# Linux 6.18 changed kernel_bind() to take struct sockaddr_unsized.
-	if linux-version compare "${KERNEL_MAJOR_MINOR}" ge 6.18; then
+	# kernel_bind() takes struct sockaddr_unsized on kernels with this type.
+	# 6.18 does not have it, so gate on the header, not the version.
+	if grep -q "struct sockaddr_unsized" "${kernel_work_dir}/include/linux/net.h"; then
 		sed -i 's/KERNEL_VERSION(6, 19, 0)/KERNEL_VERSION(6, 18, 0)/' "${module_src}/devices/generic.c"
 	fi
 

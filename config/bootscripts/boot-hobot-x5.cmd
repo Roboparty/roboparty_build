@@ -7,6 +7,7 @@ setenv uart_baudrate "115200"
 # The vendor environment does not define ramdisk_addr_r. Keep the initramfs
 # above the RDK multimedia carveouts (ending at 0xd4100000) and below 4 GiB.
 setenv ramdisk_addr_r "0xd8000000"
+setenv initrd_high "0xffffffffffffffff"
 
 if test "${hb_board_id}" = "0x0201"; then setenv fdtfile "hobot/x5-evb-lp4-1_a.dtb"; fi
 if test "${hb_board_id}" = "0x0202"; then setenv fdtfile "hobot/x5-evb-lp4-1_b.dtb"; fi
