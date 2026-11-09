@@ -35,8 +35,10 @@ function post_customize_image__install_roboparty() {
 	fi
 	chroot_sdcard_apt_get_update
 	# chroot_sdcard_apt_get upgrade
-	# robopi-tui depends on adbd; installing it pulls in the ADB daemon.
 	chroot_sdcard_apt_get_install roboparty-all robopi-tui
+	# robopi-tui only Recommends adbd and adb, and this build runs with
+	# --no-install-recommends. Install the ADB daemon and client explicitly.
+	chroot_sdcard_apt_get_install adbd adb
 	if [[ "${ARCH}" == "arm64" ]]; then
 		# MediaTek firmware package; explicitly installed on every arm64 image.
 		chroot_sdcard_apt_get_install robopi-firmware
@@ -50,7 +52,7 @@ function post_customize_image__install_roboparty() {
 				"robopi2 suite not published; skipping robopi-addon" "wrn"
 		fi
 	fi
-	if [[ "${roboparty_board_repo}" == "yes" ]]; then
+	if [[ "${BOARD}" == "rdk-x5" ]] && [[ "${roboparty_board_repo}" == "yes" ]]; then
 		# RDK user-space stack from the robopi0 suite. fake-hobot-base
 		# provides hobot-boot/hobot-dtb and the OpenSSL 1.1/libgpiod3/libteec
 		# compatibility libraries required by the vendor hobot-* packages.
@@ -208,19 +210,66 @@ function post_customize_image__clone_roboparty_deploy() {
 		[[ -f "${ros_setup_path}" ]] && { ros_setup_found="yes"; break; }
 	done
 	[[ "${ros_setup_found}" == "yes" ]] || exit_with_error "RoboParty deploy requires ROS 2"
-	{
-		printf '#!/usr/bin/env bash\n'
-		declare -f roboparty_build_deploy
-		printf '\nroboparty_build_deploy\n'
-	} > "${SDCARD}/tmp/roboparty-build-deploy.sh"
-	chmod 0755 "${SDCARD}/tmp/roboparty-build-deploy.sh"
-	display_alert "RoboParty deploy" "building ARM64 workspace inside rootfs" "info"
-	chroot_sdcard runuser -u "${user_name}" -- env \
-		-u ROS_DISTRO -u ROS_SETUP -u AMENT_PREFIX_PATH -u CMAKE_PREFIX_PATH \
-		-u COLCON_PREFIX_PATH -u ROS_PACKAGE_PATH \
-		BUILD_ROS2="${BUILD_ROS2}" HOME="${user_home}" CCACHE_DISABLE=1 \
-		CMAKE_BUILD_PARALLEL_LEVEL=8 MAKEFLAGS=-j8 /tmp/roboparty-build-deploy.sh
-	rm -f "${SDCARD}/tmp/roboparty-build-deploy.sh"
+
+	# Reuse the colcon build when source id, submodules and ROS distro match.
+	local deploy_rev deploy_dirty deploy_submodules ros_distro_name deploy_key
+	local build_cache_root="${SRC}/cache/sources/roboparty_deploy-build"
+	local build_cache="" deploy_cache_hit="no"
+	if [[ "${ROBOPARTY_DEPLOY_CACHE:-yes}" == "yes" ]]; then
+		deploy_rev="$(git -C "${source_dir}" rev-parse HEAD 2>/dev/null || true)"
+		if [[ -z "${deploy_rev}" ]]; then
+			# Fail safe: rebuild when the source id is unknown.
+			display_alert "RoboParty deploy" "cannot read source id; cache disabled" "wrn"
+		else
+			deploy_dirty="$(git -C "${source_dir}" status --porcelain 2>/dev/null || true)"
+			deploy_submodules="$(git -C "${source_dir}" submodule status --recursive 2>/dev/null || true)"
+			ros_distro_name="$(basename "$(dirname "${ros_setup_path}")")"
+			deploy_key="$(printf '%s\n%s\n%s\n%s\n%s\n' "roboparty-deploy-build-v1" \
+				"${deploy_rev}" "${deploy_dirty}" "${deploy_submodules}" "${ros_distro_name}" \
+				| sha256sum | cut -c1-16)"
+			build_cache="${build_cache_root}/${deploy_key}"
+			if [[ -d "${build_cache}/build" && -d "${build_cache}/install" ]]; then
+				display_alert "RoboParty deploy" \
+					"reusing cached colcon build ${deploy_rev:0:12} (${deploy_key})" "info"
+				install -d -m 0755 "${clone_dir}/build" "${clone_dir}/install"
+				rsync -a --delete "${build_cache}/build/" "${clone_dir}/build/"
+				rsync -a --delete "${build_cache}/install/" "${clone_dir}/install/"
+				chroot_sdcard chown -R "${user_name}:${user_name}" "${user_home}/${repo_dirname}"
+				deploy_cache_hit="yes"
+			fi
+		fi
+	fi
+
+	if [[ "${deploy_cache_hit}" != "yes" ]]; then
+		{
+			printf '#!/usr/bin/env bash\n'
+			declare -f roboparty_build_deploy
+			printf '\nroboparty_build_deploy\n'
+		} > "${SDCARD}/tmp/roboparty-build-deploy.sh"
+		chmod 0755 "${SDCARD}/tmp/roboparty-build-deploy.sh"
+		display_alert "RoboParty deploy" "building ARM64 workspace inside rootfs" "info"
+		chroot_sdcard runuser -u "${user_name}" -- env \
+			-u ROS_DISTRO -u ROS_SETUP -u AMENT_PREFIX_PATH -u CMAKE_PREFIX_PATH \
+			-u COLCON_PREFIX_PATH -u ROS_PACKAGE_PATH \
+			BUILD_ROS2="${BUILD_ROS2}" HOME="${user_home}" CCACHE_DISABLE=1 \
+			CMAKE_BUILD_PARALLEL_LEVEL=8 MAKEFLAGS=-j8 /tmp/roboparty-build-deploy.sh
+		rm -f "${SDCARD}/tmp/roboparty-build-deploy.sh"
+
+		if [[ -n "${build_cache}" ]]; then
+			local save_tmp="${build_cache}.tmp.$$"
+			rm -rf "${save_tmp}"
+			install -d -m 0755 "${save_tmp}"
+			rsync -a "${clone_dir}/build/" "${save_tmp}/build/"
+			rsync -a "${clone_dir}/install/" "${save_tmp}/install/"
+			printf '%s\n' "${deploy_key}" > "${save_tmp}/KEY"
+			rm -rf "${build_cache}"
+			mv "${save_tmp}" "${build_cache}"
+			display_alert "RoboParty deploy" \
+				"cached colcon build ${deploy_rev:0:12} (${deploy_key})" "info"
+			local keep="${ROBOPARTY_DEPLOY_CACHE_KEEP:-2}"
+			ls -1dt "${build_cache_root}"/* 2>/dev/null | tail -n +$((keep + 1)) | xargs -r rm -rf || true
+		fi
+	fi
 }
 
 function post_family_tweaks_bsp__roboparty_product_template() {
