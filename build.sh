@@ -44,7 +44,7 @@ ethercat_amd64_common=(
 	BOARD=uefi-x86
 	BRANCH=current
 	RELEASE=noble
-	VENDOR=roboparty-os
+	VENDOR=robo-os
 )
 
 usage() {
@@ -58,14 +58,15 @@ usage() {
 	    robopi4 | orin-nx | jetson-orin-nx  Jetson Orin NX (noble, L4T)
 
 	  variant (default: all):
-	    robopi2            all | desktop | cli | kernel | ethercat | bsp-cli | packages
-	    opi5plus           all | desktop | cli | kernel | ethercat | bsp-cli | packages
-	    rdk-x5             desktop | kernel | ethercat | bsp-cli | packages
-	    robopi4            all | desktop | cli | kernel | bsp-cli
+	    robopi2            all | desktop | cli | kernel | ethercat | bsp-cli | base-files | packages
+	    opi5plus           all | desktop | cli | kernel | ethercat | bsp-cli | base-files | packages
+	    rdk-x5             desktop | kernel | ethercat | bsp-cli | base-files | packages
+	    robopi4            all | desktop | cli | kernel | bsp-cli | base-files
 
 	  kernel builds kernel debs only.
 	  ethercat builds userspace ethercat-dev for arm64 and amd64.
 	  bsp-cli builds armbian-bsp-cli only.
+	  base-files builds armbian-base-files (board-independent).
 	  packages builds ethercat + bsp-cli, no kernel/image.
 	  rdk-x5 uses vendor-rt for all variants.
 	  robopi4 builds images, kernel debs and bsp-cli; L4T handles flashing.
@@ -96,7 +97,7 @@ robopi2_common=(
 	BRANCH=current
 	RELEASE=noble
 	BUILD_MINIMAL=no
-	VENDOR=roboparty-os
+	VENDOR=robo-os
 )
 
 robopi2_desktop() {
@@ -105,7 +106,7 @@ robopi2_desktop() {
 		DESKTOP_ENVIRONMENT=xfce \
 		DESKTOP_TIER=minimal \
 		BUILD_ROS2=yes \
-		BUILD_ROBOPARTY_PACKAGES=yes
+		BUILD_ROBOOS_PACKAGES=yes
 }
 
 robopi2_cli() {
@@ -139,7 +140,7 @@ opi5plus_common=(
 	BRANCH=current
 	RELEASE=noble
 	BUILD_MINIMAL=no
-	VENDOR=roboparty-os
+	VENDOR=robo-os
 )
 
 opi5plus_desktop() {
@@ -148,7 +149,7 @@ opi5plus_desktop() {
 		DESKTOP_ENVIRONMENT=xfce \
 		DESKTOP_TIER=minimal \
 		BUILD_ROS2=yes \
-		BUILD_ROBOPARTY_PACKAGES=yes
+		BUILD_ROBOOS_PACKAGES=yes
 }
 
 opi5plus_cli() {
@@ -182,7 +183,7 @@ rdk_common=(
 	BRANCH=vendor-rt
 	RELEASE=noble
 	BUILD_MINIMAL=no
-	VENDOR=roboparty-os
+	VENDOR=robo-os
 )
 
 rdk_desktop() {
@@ -191,7 +192,7 @@ rdk_desktop() {
 		DESKTOP_ENVIRONMENT=xfce \
 		DESKTOP_TIER=minimal \
 		BUILD_ROS2=yes \
-		BUILD_ROBOPARTY_PACKAGES=yes
+		BUILD_ROBOOS_PACKAGES=yes
 }
 
 rdk_kernel() {
@@ -220,7 +221,7 @@ robopi4_common=(
 	BRANCH=l4t39
 	RELEASE=noble
 	BUILD_MINIMAL=no
-	VENDOR=roboparty-os
+	VENDOR=robo-os
 )
 
 # RoboPi4 images. Flashing stays with NVIDIA L4T.
@@ -230,7 +231,7 @@ robopi4_desktop() {
 		DESKTOP_ENVIRONMENT=xfce \
 		DESKTOP_TIER=minimal \
 		BUILD_ROS2=yes \
-		BUILD_ROBOPARTY_PACKAGES=yes \
+		BUILD_ROBOOS_PACKAGES=yes \
 		INSTALL_ETHERCAT=no
 }
 
@@ -294,6 +295,7 @@ case "${target}" in
 			kernel) robopi2_kernel ;;
 			ethercat) robopi2_ethercat ;;
 			bsp-cli) robopi2_bsp_cli ;;
+			base-files) run_artifact armbian-base-files "${robopi2_common[@]}" "${artifact_args[@]}" ;;
 			packages) robopi2_packages ;;
 			*) usage; exit 2 ;;
 		esac
@@ -306,6 +308,7 @@ case "${target}" in
 			kernel) opi5plus_kernel ;;
 			ethercat) opi5plus_ethercat ;;
 			bsp-cli) opi5plus_bsp_cli ;;
+			base-files) run_artifact armbian-base-files "${opi5plus_common[@]}" "${artifact_args[@]}" ;;
 			packages) opi5plus_packages ;;
 			*) usage; exit 2 ;;
 		esac
@@ -316,6 +319,7 @@ case "${target}" in
 			kernel) rdk_kernel ;;
 			ethercat) rdk_ethercat ;;
 			bsp-cli) rdk_bsp_cli ;;
+			base-files) run_artifact armbian-base-files "${rdk_common[@]}" "${artifact_args[@]}" ;;
 			packages) rdk_packages ;;
 			*) usage; exit 2 ;;
 		esac
@@ -327,6 +331,7 @@ case "${target}" in
 			cli) robopi4_cli ;;
 			kernel) robopi4_kernel ;;
 			bsp-cli) robopi4_bsp_cli ;;
+			base-files) run_artifact armbian-base-files "${robopi4_common[@]}" "${artifact_args[@]}" ;;
 			*) usage; exit 2 ;;
 		esac
 		;;

@@ -321,10 +321,7 @@ jobs:
           sudo apt-get install -o DPkg::Lock::Timeout=600 -y --no-install-recommends build-essential ca-certificates ccache git rsync zstd
 
       - name: Build base-files deb
-        run: |
-          ./compile.sh artifact \
-            BOARD=jetson-orin-nx BRANCH=l4t39 RELEASE=noble VENDOR=roboparty-os \
-            WHAT=armbian-base-files PREFER_DOCKER=no REGIONAL_MIRROR=china GHCR_MIRROR=nju
+        run: ./build.sh robopi4 base-files
 
       - name: Collect base-files deb
         run: |

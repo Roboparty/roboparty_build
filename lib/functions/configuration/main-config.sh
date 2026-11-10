@@ -73,7 +73,7 @@ function do_main_configuration() {
 
 	# Optional RoboParty and ROS 2 image packages.
 	[[ "${BUILD_ROS2:-no}" == "yes" ]] && enable_extension "ros2"
-	[[ "${BUILD_ROBOPARTY_PACKAGES:-no}" == "yes" ]] && enable_extension "roboparty"
+	[[ "${BUILD_ROBOOS_PACKAGES:-no}" == "yes" ]] && enable_extension "roboos"
 
 	# Network stack to use, default to network-manager; configuration can override this.
 	# Will be made read-only further down.

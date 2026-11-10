@@ -28,7 +28,7 @@ configure_common_rootfs() {
     fi
 
     local user_group
-    local realtime_group="roboparty"
+    local realtime_group="roboos"
 
     if ! getent group "${realtime_group}" >/dev/null 2>&1; then
         groupadd --system "${realtime_group}"
@@ -70,7 +70,7 @@ EOF
 
     install -d -m 0755 /etc/security/limits.d
     rm -f /etc/security/limits.d/robo.conf
-    cat > /etc/security/limits.d/roboparty.conf <<EOF
+    cat > /etc/security/limits.d/roboos.conf <<EOF
 @${realtime_group} - rtprio 99
 @${realtime_group} - memlock unlimited
 EOF

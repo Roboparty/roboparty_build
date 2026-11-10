@@ -1,6 +1,6 @@
 function post_customize_image__install_roboparty() {
 	[[ "${BUILD_ROS2}" == "yes" ]] || return 0
-	[[ "${BUILD_ROBOPARTY_PACKAGES}" == "yes" ]] || return 0
+	[[ "${BUILD_ROBOOS_PACKAGES}" == "yes" ]] || return 0
 
 	# Add the signed RoboParty APT repository and install the robot stack from it.
 	# Map each board to its APT suite: rdk-x5 -> robopi0,
